@@ -288,12 +288,17 @@
             tab.addEventListener('click', function() {
                 // 移除所有active状态
                 document.querySelectorAll('.tab').forEach(t => t.classList.remove('tab-active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+                document.querySelectorAll('.tab-content').forEach(c => {
+                    c.classList.add('hidden');
+                    c.style.display = 'none';
+                });
 
                 // 添加当前active状态
                 this.classList.add('tab-active');
                 const tabName = this.dataset.tab;
-                document.getElementById(`${tabName}-tab`).classList.remove('hidden');
+                const targetTab = document.getElementById(`${tabName}-tab`);
+                targetTab.classList.remove('hidden');
+                targetTab.style.display = 'block';
             });
         });
 
@@ -301,11 +306,16 @@
         document.querySelectorAll('[data-subtab]').forEach(tab => {
             tab.addEventListener('click', function() {
                 document.querySelectorAll('[data-subtab]').forEach(t => t.classList.remove('tab-active'));
-                document.querySelectorAll('.subtab-content').forEach(c => c.classList.add('hidden'));
+                document.querySelectorAll('.subtab-content').forEach(c => {
+                    c.classList.add('hidden');
+                    c.style.display = 'none';
+                });
 
                 this.classList.add('tab-active');
                 const subtabName = this.dataset.subtab;
-                document.getElementById(`${subtabName}-content`).classList.remove('hidden');
+                const targetSubtab = document.getElementById(`${subtabName}-content`);
+                targetSubtab.classList.remove('hidden');
+                targetSubtab.style.display = 'block';
             });
         });
     </script>
