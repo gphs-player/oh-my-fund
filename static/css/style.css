@@ -1,0 +1,102 @@
+/* 全局动画 */
+* {
+    transition: all 0.3s ease;
+}
+
+/* 页面加载动画 */
+body {
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* 毛玻璃增强 */
+.backdrop-blur-sm {
+    backdrop-filter: blur(8px);
+}
+
+.backdrop-blur-md {
+    backdrop-filter: blur(16px);
+}
+
+/* 霓虹边框效果 */
+.neon-border {
+    border: 2px solid transparent;
+    background: linear-gradient(#1a1a2e, #1a1a2e) padding-box,
+                linear-gradient(45deg, #60a5fa, #a78bfa, #22d3ee) border-box;
+    border-radius: 0.5rem;
+}
+
+/* 按钮悬停效果 */
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(96, 165, 250, 0.3);
+}
+
+/* 表格行悬停 */
+.table tbody tr:hover {
+    background-color: rgba(96, 165, 250, 0.1);
+    transform: scale(1.01);
+}
+
+/* Tab切换动画 */
+.tab-content {
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 渐变文字 */
+.gradient-text {
+    background: linear-gradient(45deg, #60a5fa, #a78bfa, #22d3ee);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* 卡片悬停效果 */
+.card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 40px rgba(96, 165, 250, 0.2);
+}
+
+/* 输入框聚焦效果 */
+.input:focus, .select:focus, .textarea:focus {
+    border-color: #60a5fa;
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(45deg, #60a5fa, #a78bfa);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(45deg, #a78bfa, #22d3ee);
+}
