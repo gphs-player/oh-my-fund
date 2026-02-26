@@ -176,8 +176,37 @@
             <div id="compound-tab" class="tab-content hidden">
                 <div class="card bg-base-300/50 backdrop-blur-sm shadow-xl">
                     <div class="card-body">
-                        <h2 class="card-title">复利计算器</h2>
-                        <p>复利计算器内容</p>
+                        <h2 class="card-title gradient-text">复利计算器</h2>
+
+                        <div class="form-control mb-4">
+                            <label class="label"><span class="label-text">计算年限</span></label>
+                            <input type="number" id="compound-years" class="input input-bordered" value="20" min="1" max="50">
+                        </div>
+
+                        <div class="divider">投资项列表</div>
+
+                        <div id="investment-items" class="space-y-4">
+                            <!-- 动态生成投资项 -->
+                        </div>
+
+                        <button class="btn btn-outline btn-sm w-full" onclick="CompoundCalculator.addItem()">
+                            + 添加投资项
+                        </button>
+
+                        <button class="btn btn-primary w-full mt-4" onclick="CompoundCalculator.calculate()">
+                            计算复利
+                        </button>
+
+                        <!-- 结果展示 -->
+                        <div id="compound-result" class="mt-6 hidden">
+                            <div class="divider">计算结果</div>
+                            <canvas id="compound-chart"></canvas>
+                            <div class="overflow-x-auto mt-4">
+                                <table class="table table-sm" id="compound-table">
+                                    <!-- 动态生成 -->
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
