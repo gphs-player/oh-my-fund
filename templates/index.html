@@ -304,7 +304,8 @@
 
         // 年化计算器子Tab切换
         document.querySelectorAll('[data-subtab]').forEach(tab => {
-            tab.addEventListener('click', function() {
+            tab.addEventListener('click', function(e) {
+                e.stopPropagation(); // 阻止事件冒泡
                 document.querySelectorAll('[data-subtab]').forEach(t => t.classList.remove('tab-active'));
                 document.querySelectorAll('.subtab-content').forEach(c => {
                     c.classList.add('hidden');
