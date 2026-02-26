@@ -3,6 +3,16 @@
     transition: all 0.3s ease;
 }
 
+/* 确保hidden类正常工作 */
+.hidden {
+    display: none !important;
+}
+
+/* 确保card-body有最小高度 */
+.card-body {
+    min-height: 200px;
+}
+
 /* 页面加载动画 */
 body {
     animation: fadeIn 0.5s ease-in;
