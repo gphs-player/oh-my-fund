@@ -27,13 +27,21 @@ body {
     }
 }
 
-/* 毛玻璃增强 */
+/* 毛玻璃增强 - 更亮的背景 */
 .backdrop-blur-sm {
     backdrop-filter: blur(8px);
 }
 
 .backdrop-blur-md {
     backdrop-filter: blur(16px);
+    background: rgba(0, 0, 0, 0.15) !important; /* 降低黑色背景透明度 */
+}
+
+/* 卡片增强 - 更亮的背景和霓虹边框 */
+.card {
+    background: rgba(30, 41, 59, 0.7) !important; /* 更亮的卡片背景 */
+    border: 1px solid rgba(96, 165, 250, 0.3);
+    box-shadow: 0 0 20px rgba(96, 165, 250, 0.2);
 }
 
 /* 霓虹边框效果 */
@@ -44,16 +52,50 @@ body {
     border-radius: 0.5rem;
 }
 
-/* 按钮悬停效果 */
+/* 按钮悬停效果 - 增强发光 */
 .btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 10px 20px rgba(96, 165, 250, 0.3);
+    box-shadow: 0 10px 30px rgba(96, 165, 250, 0.5);
 }
 
-/* 表格行悬停 */
+.btn-primary {
+    background: linear-gradient(135deg, #60a5fa, #3b82f6);
+    border: none;
+    box-shadow: 0 4px 15px rgba(96, 165, 250, 0.4);
+}
+
+.btn-secondary {
+    background: linear-gradient(135deg, #a78bfa, #8b5cf6);
+    border: none;
+    box-shadow: 0 4px 15px rgba(167, 139, 250, 0.4);
+}
+
+.btn-accent {
+    background: linear-gradient(135deg, #22d3ee, #06b6d4);
+    border: none;
+    box-shadow: 0 4px 15px rgba(34, 211, 238, 0.4);
+}
+
+/* 表格行悬停 - 更明显的高亮 */
 .table tbody tr:hover {
-    background-color: rgba(96, 165, 250, 0.1);
+    background-color: rgba(96, 165, 250, 0.2);
     transform: scale(1.01);
+    box-shadow: 0 0 15px rgba(96, 165, 250, 0.3);
+}
+
+/* 表格样式增强 */
+.table {
+    background: rgba(15, 23, 42, 0.5);
+}
+
+.table thead {
+    background: rgba(30, 41, 59, 0.8);
+    border-bottom: 2px solid rgba(96, 165, 250, 0.5);
+}
+
+.table th {
+    color: #60a5fa !important;
+    font-weight: 600;
 }
 
 /* Tab切换动画 */
@@ -72,24 +114,80 @@ body {
     }
 }
 
-/* 渐变文字 */
+/* 渐变文字增强 */
 .gradient-text {
-    background: linear-gradient(45deg, #60a5fa, #a78bfa, #22d3ee);
+    background: linear-gradient(45deg, #60a5fa, #a78bfa, #22d3ee, #f472b6);
+    background-size: 200% 200%;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+    animation: gradientShift 3s ease infinite;
+}
+
+@keyframes gradientShift {
+    0%, 100% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
 }
 
 /* 卡片悬停效果 */
 .card:hover {
     transform: translateY(-4px);
-    box-shadow: 0 20px 40px rgba(96, 165, 250, 0.2);
+    box-shadow: 0 20px 40px rgba(96, 165, 250, 0.3);
+    border-color: rgba(96, 165, 250, 0.6);
 }
 
-/* 输入框聚焦效果 */
+/* 输入框聚焦效果 - 霓虹发光 */
 .input:focus, .select:focus, .textarea:focus {
     border-color: #60a5fa;
-    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.3), 0 0 20px rgba(96, 165, 250, 0.4);
+    background: rgba(30, 41, 59, 0.9);
+}
+
+.input, .select, .textarea {
+    background: rgba(15, 23, 42, 0.6);
+    border-color: rgba(96, 165, 250, 0.3);
+}
+
+/* Tab导航增强 */
+.tabs-boxed {
+    background: rgba(30, 41, 59, 0.7) !important;
+    border: 1px solid rgba(96, 165, 250, 0.3);
+    box-shadow: 0 4px 15px rgba(96, 165, 250, 0.2);
+}
+
+.tab {
+    color: #94a3b8;
+}
+
+.tab-active {
+    background: linear-gradient(135deg, #60a5fa, #3b82f6) !important;
+    color: white !important;
+    box-shadow: 0 4px 15px rgba(96, 165, 250, 0.5);
+}
+
+/* 徽章样式增强 */
+.badge {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.badge-error {
+    background: linear-gradient(135deg, #f87171, #ef4444);
+}
+
+.badge-warning {
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+}
+
+.badge-info {
+    background: linear-gradient(135deg, #60a5fa, #3b82f6);
+}
+
+.badge-success {
+    background: linear-gradient(135deg, #34d399, #10b981);
 }
 
 /* 滚动条样式 */
@@ -99,7 +197,7 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-    background: rgba(0, 0, 0, 0.1);
+    background: rgba(15, 23, 42, 0.5);
 }
 
 ::-webkit-scrollbar-thumb {
@@ -109,4 +207,18 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
     background: linear-gradient(45deg, #a78bfa, #22d3ee);
+}
+
+/* Alert样式增强 */
+.alert {
+    background: rgba(30, 41, 59, 0.9);
+    border: 1px solid rgba(96, 165, 250, 0.5);
+    box-shadow: 0 4px 15px rgba(96, 165, 250, 0.3);
+}
+
+/* 模态框增强 */
+.modal-box {
+    background: rgba(30, 41, 59, 0.95) !important;
+    border: 1px solid rgba(96, 165, 250, 0.5);
+    box-shadow: 0 20px 60px rgba(96, 165, 250, 0.4);
 }
