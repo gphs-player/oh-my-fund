@@ -38,8 +38,70 @@
             <div id="investment-tab" class="tab-content">
                 <div class="card bg-base-300/50 backdrop-blur-sm shadow-xl">
                     <div class="card-body">
-                        <h2 class="card-title">投资计划</h2>
-                        <p>投资计划模块内容</p>
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="card-title gradient-text">投资计划</h2>
+                            <div class="flex gap-2">
+                                <button class="btn btn-primary btn-sm" onclick="InvestmentUI.showAddModal()">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+                                    </svg>
+                                    添加
+                                </button>
+                                <label class="btn btn-secondary btn-sm">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                                    </svg>
+                                    导入CSV
+                                    <input type="file" accept=".csv" class="hidden" id="csv-import" onchange="InvestmentUI.handleImport(event)">
+                                </label>
+                                <button class="btn btn-accent btn-sm" onclick="InvestmentManager.exportCSV()">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+                                    </svg>
+                                    导出CSV
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 表格 -->
+                        <div class="overflow-x-auto">
+                            <table class="table table-zebra w-full">
+                                <thead>
+                                    <tr>
+                                        <th>基金名称</th>
+                                        <th>基金代码</th>
+                                        <th>板块</th>
+                                        <th class="cursor-pointer" onclick="InvestmentUI.toggleSort()">
+                                            仓位 <span id="sort-icon">↕</span>
+                                        </th>
+                                        <th>仓位占比</th>
+                                        <th>风险等级</th>
+                                        <th>持有计划</th>
+                                        <th>标签</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="investment-table-body">
+                                    <!-- 动态生成 -->
+                                </tbody>
+                                <tfoot id="investment-table-footer">
+                                    <!-- 汇总行 -->
+                                </tfoot>
+                            </table>
+                        </div>
+
+                        <!-- 图表区域 -->
+                        <div class="mt-8">
+                            <h3 class="text-xl font-bold mb-4">数据可视化</h3>
+                            <div class="flex gap-2 mb-4">
+                                <button class="btn btn-sm btn-outline" onclick="InvestmentUI.renderChart('sector')">按板块</button>
+                                <button class="btn btn-sm btn-outline" onclick="InvestmentUI.renderChart('risk_level')">按风险等级</button>
+                                <button class="btn btn-sm btn-outline" onclick="InvestmentUI.renderChart('holding_plan')">按持有计划</button>
+                            </div>
+                            <div class="flex justify-center">
+                                <canvas id="investment-chart" width="400" height="400"></canvas>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -64,6 +126,68 @@
 
         </div>
     </div>
+
+    <!-- 添加/编辑模态框 -->
+    <dialog id="investment-modal" class="modal">
+        <div class="modal-box bg-base-300/90 backdrop-blur-md">
+            <h3 class="font-bold text-lg mb-4" id="modal-title">添加投资记录</h3>
+            <form id="investment-form" onsubmit="InvestmentUI.handleSubmit(event)">
+                <input type="hidden" id="investment-id">
+
+                <div class="form-control mb-3">
+                    <label class="label"><span class="label-text">基金名称 *</span></label>
+                    <input type="text" id="fund-name" class="input input-bordered" required>
+                </div>
+
+                <div class="form-control mb-3">
+                    <label class="label"><span class="label-text">基金代码 * (5-8位数字)</span></label>
+                    <input type="text" id="fund-code" class="input input-bordered" pattern="\d{5,8}" required>
+                </div>
+
+                <div class="form-control mb-3">
+                    <label class="label"><span class="label-text">板块 *</span></label>
+                    <input type="text" id="sector" class="input input-bordered" required>
+                </div>
+
+                <div class="form-control mb-3">
+                    <label class="label"><span class="label-text">仓位 * (0-100)</span></label>
+                    <input type="number" id="position" class="input input-bordered" min="0" max="100" step="0.01" required>
+                </div>
+
+                <div class="form-control mb-3">
+                    <label class="label"><span class="label-text">风险等级 *</span></label>
+                    <select id="risk-level" class="select select-bordered">
+                        <option value="高">高</option>
+                        <option value="中高">中高</option>
+                        <option value="中" selected>中</option>
+                        <option value="低">低</option>
+                    </select>
+                </div>
+
+                <div class="form-control mb-3">
+                    <label class="label"><span class="label-text">持有计划 *</span></label>
+                    <select id="holding-plan" class="select select-bordered">
+                        <option value="长期">长期</option>
+                        <option value="中期" selected>中期</option>
+                        <option value="短期">短期</option>
+                    </select>
+                </div>
+
+                <div class="form-control mb-3">
+                    <label class="label"><span class="label-text">标签</span></label>
+                    <input type="text" id="tags" class="input input-bordered" placeholder="多个标签用逗号分隔">
+                </div>
+
+                <div class="modal-action">
+                    <button type="button" class="btn" onclick="document.getElementById('investment-modal').close()">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+            <button>关闭</button>
+        </form>
+    </dialog>
 
     <!-- JavaScript -->
     <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
