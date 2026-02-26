@@ -3,6 +3,23 @@
     transition: all 0.3s ease;
 }
 
+/* 全局文字颜色优化 */
+body {
+    color: #e2e8f0; /* 更亮的文字颜色 */
+}
+
+.label-text, .label-text-alt {
+    color: #cbd5e1 !important; /* 标签文字更亮 */
+}
+
+th, td {
+    color: #e2e8f0 !important; /* 表格文字更亮 */
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: #f1f5f9; /* 标题更亮 */
+}
+
 /* 确保hidden类正常工作 */
 .hidden {
     display: none !important;
@@ -180,7 +197,7 @@ body {
 }
 
 .tab {
-    color: #94a3b8;
+    color: #cbd5e1; /* 改为更亮的灰色 */
     border: 2px solid rgba(148, 163, 184, 0.3);
     border-radius: 0.5rem;
     min-width: auto;
