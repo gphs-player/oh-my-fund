@@ -283,11 +283,11 @@
     <script src="{{ url_for('static', filename='js/compound.js') }}"></script>
 
     <script>
-        // Tab切换逻辑
-        document.querySelectorAll('.tab').forEach(tab => {
+        // Tab切换逻辑 - 只选择主Tab，不包括子Tab
+        document.querySelectorAll('.tabs-bordered > .tab').forEach(tab => {
             tab.addEventListener('click', function() {
                 // 移除所有active状态
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('tab-active'));
+                document.querySelectorAll('.tabs-bordered > .tab').forEach(t => t.classList.remove('tab-active'));
                 document.querySelectorAll('.tab-content').forEach(c => {
                     c.classList.add('hidden');
                     c.style.display = 'none';
