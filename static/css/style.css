@@ -152,21 +152,35 @@ body {
     border-color: rgba(96, 165, 250, 0.3);
 }
 
-/* Tab导航增强 */
-.tabs-boxed {
-    background: rgba(30, 41, 59, 0.7) !important;
-    border: 1px solid rgba(96, 165, 250, 0.3);
-    box-shadow: 0 4px 15px rgba(96, 165, 250, 0.2);
+/* Tab导航增强 - Material描边风格 */
+.tabs-bordered {
+    background: transparent !important;
+    border: none;
+    gap: 1rem;
 }
 
 .tab {
     color: #94a3b8;
+    border: 2px solid rgba(148, 163, 184, 0.3);
+    border-radius: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    min-width: auto;
+    transition: all 0.3s ease;
+}
+
+.tab:hover {
+    border-color: rgba(96, 165, 250, 0.6);
+    color: #60a5fa;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(96, 165, 250, 0.3);
 }
 
 .tab-active {
-    background: linear-gradient(135deg, #60a5fa, #3b82f6) !important;
-    color: white !important;
-    box-shadow: 0 4px 15px rgba(96, 165, 250, 0.5);
+    background: transparent !important;
+    color: #60a5fa !important;
+    border: 2px solid #60a5fa !important;
+    box-shadow: 0 0 20px rgba(96, 165, 250, 0.5), inset 0 0 20px rgba(96, 165, 250, 0.1);
+    font-weight: 600;
 }
 
 /* 徽章样式增强 */
