@@ -109,8 +109,66 @@
             <div id="annualized-tab" class="tab-content hidden">
                 <div class="card bg-base-300/50 backdrop-blur-sm shadow-xl">
                     <div class="card-body">
-                        <h2 class="card-title">年化计算器</h2>
-                        <p>年化计算器内容</p>
+                        <h2 class="card-title gradient-text">年化收益率计算器</h2>
+
+                        <!-- 子Tab -->
+                        <div role="tablist" class="tabs tabs-bordered mb-4">
+                            <a role="tab" class="tab tab-active" data-subtab="method1">方式一：持有周期+总收益率</a>
+                            <a role="tab" class="tab" data-subtab="method2">方式二：期初期末净值</a>
+                        </div>
+
+                        <!-- 方式一 -->
+                        <div id="method1-content" class="subtab-content">
+                            <form onsubmit="AnnualizedCalculator.calculateMethod1(event)" class="space-y-4">
+                                <div class="form-control">
+                                    <label class="label"><span class="label-text">持有周期（天）</span></label>
+                                    <input type="number" id="days1" class="input input-bordered" min="1" required>
+                                </div>
+
+                                <div class="form-control">
+                                    <label class="label"><span class="label-text">总收益率（%）</span></label>
+                                    <input type="number" id="total-return1" class="input input-bordered" step="0.01" required>
+                                </div>
+
+                                <button type="submit" class="btn btn-primary w-full">计算</button>
+
+                                <div id="result1" class="alert alert-info hidden mt-4">
+                                    <div>
+                                        <span class="font-bold">年化收益率：</span>
+                                        <span id="result1-value" class="text-2xl"></span>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- 方式二 -->
+                        <div id="method2-content" class="subtab-content hidden">
+                            <form onsubmit="AnnualizedCalculator.calculateMethod2(event)" class="space-y-4">
+                                <div class="form-control">
+                                    <label class="label"><span class="label-text">期初净值</span></label>
+                                    <input type="number" id="initial-nav" class="input input-bordered" step="0.0001" min="0" required>
+                                </div>
+
+                                <div class="form-control">
+                                    <label class="label"><span class="label-text">持有周期（天）</span></label>
+                                    <input type="number" id="days2" class="input input-bordered" min="1" required>
+                                </div>
+
+                                <div class="form-control">
+                                    <label class="label"><span class="label-text">期末净值</span></label>
+                                    <input type="number" id="final-nav" class="input input-bordered" step="0.0001" min="0" required>
+                                </div>
+
+                                <button type="submit" class="btn btn-primary w-full">计算</button>
+
+                                <div id="result2" class="alert alert-info hidden mt-4">
+                                    <div>
+                                        <div><span class="font-bold">总收益率：</span><span id="result2-total"></span></div>
+                                        <div><span class="font-bold">年化收益率：</span><span id="result2-annual" class="text-2xl"></span></div>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -207,6 +265,18 @@
                 this.classList.add('tab-active');
                 const tabName = this.dataset.tab;
                 document.getElementById(`${tabName}-tab`).classList.remove('hidden');
+            });
+        });
+
+        // 年化计算器子Tab切换
+        document.querySelectorAll('[data-subtab]').forEach(tab => {
+            tab.addEventListener('click', function() {
+                document.querySelectorAll('[data-subtab]').forEach(t => t.classList.remove('tab-active'));
+                document.querySelectorAll('.subtab-content').forEach(c => c.classList.add('hidden'));
+
+                this.classList.add('tab-active');
+                const subtabName = this.dataset.subtab;
+                document.getElementById(`${subtabName}-content`).classList.remove('hidden');
             });
         });
     </script>
