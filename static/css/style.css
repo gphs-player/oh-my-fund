@@ -34,14 +34,14 @@ body {
 
 .backdrop-blur-md {
     backdrop-filter: blur(16px);
-    background: rgba(0, 0, 0, 0.15) !important; /* 降低黑色背景透明度 */
+    background: rgba(0, 0, 0, 0.05) !important; /* 进一步降低黑色背景透明度 */
 }
 
 /* 卡片增强 - 更亮的背景和霓虹边框 */
 .card {
-    background: rgba(30, 41, 59, 0.7) !important; /* 更亮的卡片背景 */
-    border: 1px solid rgba(96, 165, 250, 0.3);
-    box-shadow: 0 0 20px rgba(96, 165, 250, 0.2);
+    background: rgba(255, 255, 255, 0.08) !important; /* 使用白色半透明背景 */
+    border: 1px solid rgba(96, 165, 250, 0.4);
+    box-shadow: 0 0 30px rgba(96, 165, 250, 0.3);
 }
 
 /* 霓虹边框效果 */
@@ -62,18 +62,33 @@ body {
     background: linear-gradient(135deg, #60a5fa, #3b82f6);
     border: none;
     box-shadow: 0 4px 15px rgba(96, 165, 250, 0.4);
+    color: white !important;
 }
 
 .btn-secondary {
     background: linear-gradient(135deg, #a78bfa, #8b5cf6);
     border: none;
     box-shadow: 0 4px 15px rgba(167, 139, 250, 0.4);
+    color: white !important;
 }
 
 .btn-accent {
     background: linear-gradient(135deg, #22d3ee, #06b6d4);
     border: none;
     box-shadow: 0 4px 15px rgba(34, 211, 238, 0.4);
+    color: white !important;
+}
+
+.btn-outline {
+    border: 2px solid rgba(96, 165, 250, 0.5);
+    color: #60a5fa;
+    background: rgba(96, 165, 250, 0.05);
+}
+
+.btn-outline:hover {
+    background: rgba(96, 165, 250, 0.15);
+    border-color: #60a5fa;
+    color: #60a5fa;
 }
 
 /* 表格行悬停 - 更明显的高亮 */
@@ -85,17 +100,21 @@ body {
 
 /* 表格样式增强 */
 .table {
-    background: rgba(15, 23, 42, 0.5);
+    background: rgba(255, 255, 255, 0.05);
 }
 
 .table thead {
-    background: rgba(30, 41, 59, 0.8);
+    background: rgba(96, 165, 250, 0.15);
     border-bottom: 2px solid rgba(96, 165, 250, 0.5);
 }
 
 .table th {
     color: #60a5fa !important;
     font-weight: 600;
+}
+
+.table tbody tr {
+    border-bottom: 1px solid rgba(96, 165, 250, 0.1);
 }
 
 /* Tab切换动画 */
@@ -144,12 +163,13 @@ body {
 .input:focus, .select:focus, .textarea:focus {
     border-color: #60a5fa;
     box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.3), 0 0 20px rgba(96, 165, 250, 0.4);
-    background: rgba(30, 41, 59, 0.9);
+    background: rgba(255, 255, 255, 0.1);
 }
 
 .input, .select, .textarea {
-    background: rgba(15, 23, 42, 0.6);
+    background: rgba(255, 255, 255, 0.05);
     border-color: rgba(96, 165, 250, 0.3);
+    color: #e2e8f0;
 }
 
 /* Tab导航增强 - Material描边风格 */
@@ -228,14 +248,14 @@ body {
 
 /* Alert样式增强 */
 .alert {
-    background: rgba(30, 41, 59, 0.9);
+    background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(96, 165, 250, 0.5);
     box-shadow: 0 4px 15px rgba(96, 165, 250, 0.3);
 }
 
 /* 模态框增强 */
 .modal-box {
-    background: rgba(30, 41, 59, 0.95) !important;
+    background: rgba(30, 41, 59, 0.98) !important;
     border: 1px solid rgba(96, 165, 250, 0.5);
     box-shadow: 0 20px 60px rgba(96, 165, 250, 0.4);
 }
