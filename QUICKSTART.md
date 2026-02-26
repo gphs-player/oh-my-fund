@@ -16,12 +16,12 @@ python app.py
 ```
  * Serving Flask app 'app'
  * Debug mode: on
- * Running on http://0.0.0.0:5000
+ * Running on http://0.0.0.0:5001
 ```
 
 ## 第三步：打开浏览器
 
-访问：http://localhost:5000
+访问：http://localhost:5001
 
 ## 快速体验
 
