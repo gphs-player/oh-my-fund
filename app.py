@@ -76,6 +76,57 @@ def save_markets():
 # =====================
 DATASOURCES_FILE = os.path.join(os.path.dirname(__file__), 'data', 'datasources.csv')
 SETTINGS_FILE = os.path.join(os.path.dirname(__file__), 'data', 'settings.csv')
+INVESTMENTS_FILE = os.path.join(os.path.dirname(__file__), 'data', 'investments.csv')
+
+
+def ensure_investments_file():
+    """确保持仓文件存在"""
+    data_dir = os.path.dirname(INVESTMENTS_FILE)
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
+    if not os.path.exists(INVESTMENTS_FILE):
+        with open(INVESTMENTS_FILE, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['fund_code', 'fund_name', 'sector', 'position', 'trade_type', 'market', 'risk_level', 'holding_plan'])
+
+
+def read_investments():
+    """读取所有持仓"""
+    ensure_investments_file()
+    investments = []
+    with open(INVESTMENTS_FILE, 'r', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            investments.append({
+                'fund_code': row['fund_code'],
+                'fund_name': row['fund_name'],
+                'sector': row['sector'],
+                'position': float(row['position']) if row['position'] else 0,
+                'trade_type': row['trade_type'],
+                'market': row['market'],
+                'risk_level': row['risk_level'],
+                'holding_plan': row['holding_plan']
+            })
+    return investments
+
+
+def write_investments(investments):
+    """写入所有持仓"""
+    ensure_investments_file()
+    with open(INVESTMENTS_FILE, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(['fund_code', 'fund_name', 'sector', 'position', 'trade_type', 'market', 'risk_level', 'holding_plan'])
+        for inv in investments:
+            writer.writerow([
+                inv['fund_code'],
+                inv['fund_name'],
+                inv['sector'],
+                inv['position'],
+                inv['trade_type'],
+                inv['market'],
+                inv['risk_level'],
+                inv['holding_plan']
+            ])
 
 
 def ensure_datasources_file():
