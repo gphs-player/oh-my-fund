@@ -72,6 +72,84 @@ def save_markets():
 
 
 # =====================
+# 持仓数据 API
+# =====================
+@app.route('/api/investments', methods=['GET'])
+def list_investments():
+    """获取所有持仓"""
+    investments = read_investments()
+    return jsonify(investments)
+
+
+@app.route('/api/investments', methods=['POST'])
+def add_investment():
+    """添加持仓"""
+    data = request.get_json()
+    fund_code = data.get('fund_code')
+    
+    if not fund_code:
+        return jsonify({'success': False, 'error': '基金代码不能为空'}), 400
+    
+    investments = read_investments()
+    
+    # 检查是否已存在
+    for inv in investments:
+        if inv['fund_code'] == fund_code:
+            return jsonify({'success': False, 'error': '该基金已存在'}), 400
+    
+    investments.append({
+        'fund_code': fund_code,
+        'fund_name': data.get('fund_name', ''),
+        'sector': data.get('sector', ''),
+        'position': float(data.get('position', 0)),
+        'trade_type': data.get('trade_type', ''),
+        'market': data.get('market', ''),
+        'risk_level': data.get('risk_level', '中'),
+        'holding_plan': data.get('holding_plan', '中期')
+    })
+    
+    write_investments(investments)
+    return jsonify({'success': True})
+
+
+@app.route('/api/investments/<fund_code>', methods=['PUT'])
+def update_investment(fund_code):
+    """更新持仓"""
+    data = request.get_json()
+    investments = read_investments()
+    
+    for i, inv in enumerate(investments):
+        if inv['fund_code'] == fund_code:
+            investments[i] = {
+                'fund_code': fund_code,
+                'fund_name': data.get('fund_name', inv['fund_name']),
+                'sector': data.get('sector', inv['sector']),
+                'position': float(data.get('position', inv['position'])),
+                'trade_type': data.get('trade_type', inv['trade_type']),
+                'market': data.get('market', inv['market']),
+                'risk_level': data.get('risk_level', inv['risk_level']),
+                'holding_plan': data.get('holding_plan', inv['holding_plan'])
+            }
+            write_investments(investments)
+            return jsonify({'success': True})
+    
+    return jsonify({'success': False, 'error': '持仓不存在'}), 404
+
+
+@app.route('/api/investments/<fund_code>', methods=['DELETE'])
+def delete_investment(fund_code):
+    """删除持仓"""
+    investments = read_investments()
+    new_investments = [inv for inv in investments if inv['fund_code'] != fund_code]
+    
+    if len(new_investments) == len(investments):
+        return jsonify({'success': False, 'error': '持仓不存在'}), 404
+    
+    write_investments(new_investments)
+    return jsonify({'success': True})
+
+
+# =====================
 # 数据源配置文件路径
 # =====================
 DATASOURCES_FILE = os.path.join(os.path.dirname(__file__), 'data', 'datasources.csv')
