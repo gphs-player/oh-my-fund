@@ -1,0 +1,23 @@
+<!-- 管理市场模态框 -->
+<dialog id="market-modal" class="modal">
+    <div class="modal-box bg-base-300/90 backdrop-blur-md">
+        <h3 class="font-bold text-lg mb-4">管理市场</h3>
+        
+        <div id="market-list" class="mb-4">
+            <!-- 动态生成 -->
+        </div>
+        
+        <div class="flex gap-2 mb-4">
+            <input type="text" id="new-market" class="input input-bordered flex-1" placeholder="输入新市场名称">
+            <button type="button" class="btn btn-primary" onclick="MarketManager.add()">添加</button>
+        </div>
+        
+        <div class="modal-action">
+            <button type="button" class="btn" onclick="document.getElementById('market-modal').close()">取消</button>
+            <button type="button" class="btn btn-primary" onclick="MarketManager.save()">保存</button>
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>关闭</button>
+    </form>
+</dialog>
