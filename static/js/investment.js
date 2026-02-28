@@ -555,5 +555,5 @@ const MarketManager = {
 // 页面加载时初始化
 document.addEventListener('DOMContentLoaded', async function() {
     await MarketManager.load();
-    InvestmentManager.init();
+    await InvestmentManager.init();
 });
