@@ -1,0 +1,66 @@
+<div id="annualized-tab" class="tab-content hidden">
+    <div class="card bg-base-300/50 backdrop-blur-sm shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title gradient-text">年化收益率计算器</h2>
+
+            <!-- 子Tab -->
+            <div role="tablist" class="tabs tabs-bordered mb-4">
+                <a role="tab" class="tab tab-active" data-subtab="method1">方式一：持有周期+总收益率</a>
+                <a role="tab" class="tab" data-subtab="method2">方式二：期初期末净值</a>
+            </div>
+
+            <!-- 方式一 -->
+            <div id="method1-content" class="subtab-content" style="display: block;">
+                <form onsubmit="AnnualizedCalculator.calculateMethod1(event)" class="space-y-4">
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">持有周期（年）</span></label>
+                        <input type="number" id="years1" class="input input-bordered" min="0.01" step="0.01" required>
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">总收益率（%）</span></label>
+                        <input type="number" id="total-return1" class="input input-bordered" step="0.01" required>
+                    </div>
+
+                    <button type="submit" class="btn btn-sm text-white w-1/6 border-none" style="background: linear-gradient(135deg, #818cf8, #6366f1);">计算</button>
+
+                    <div id="result1" class="alert alert-success hidden mt-4">
+                        <div class="text-white">
+                            <span class="font-bold">年化收益率：</span>
+                            <span id="result1-value" class="text-2xl font-bold text-emerald-300"></span>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- 方式二 -->
+            <div id="method2-content" class="subtab-content hidden">
+                <form onsubmit="AnnualizedCalculator.calculateMethod2(event)" class="space-y-4">
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">期初净值</span></label>
+                        <input type="number" id="initial-nav" class="input input-bordered" step="0.0001" min="0" required>
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">持有周期（年）</span></label>
+                        <input type="number" id="years2" class="input input-bordered" min="0.01" step="0.01" required>
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">期末净值</span></label>
+                        <input type="number" id="final-nav" class="input input-bordered" step="0.0001" min="0" required>
+                    </div>
+
+                    <button type="submit" class="btn btn-sm text-white w-1/6 border-none" style="background: linear-gradient(135deg, #818cf8, #6366f1);">计算</button>
+
+                    <div id="result2" class="alert alert-success hidden mt-4">
+                        <div class="text-white">
+                            <div><span class="font-bold">总收益率：</span><span id="result2-total" class="text-emerald-300"></span></div>
+                            <div><span class="font-bold">年化收益率：</span><span id="result2-annual" class="text-2xl font-bold text-emerald-300"></span></div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
