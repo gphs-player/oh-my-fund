@@ -1,35 +1,79 @@
-// 投资计划数据管理
+// 持仓数据管理
 const InvestmentManager = {
     data: [],
 
     // 初始化
-    init: function() {
-        this.render();
+    init: async function() {
+        await this.load();
+    },
+
+    // 从服务器加载数据
+    load: async function() {
+        try {
+            const response = await fetch('/api/investments');
+            this.data = await response.json();
+            this.render();
+        } catch (error) {
+            showToast('加载持仓数据失败: ' + error.message, 'error');
+        }
     },
 
     // 添加记录
-    add: function(investment) {
-        const id = Date.now();
-        this.data.push({ id, ...investment });
-        this.render();
-        showToast('添加成功', 'success');
+    add: async function(investment) {
+        try {
+            const response = await fetch('/api/investments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(investment)
+            });
+            const result = await response.json();
+            if (result.success) {
+                await this.load();
+                showToast('添加成功', 'success');
+            } else {
+                showToast(result.error || '添加失败', 'error');
+            }
+        } catch (error) {
+            showToast('添加失败: ' + error.message, 'error');
+        }
     },
 
     // 更新记录
-    update: function(id, investment) {
-        const index = this.data.findIndex(item => item.id === id);
-        if (index !== -1) {
-            this.data[index] = { id, ...investment };
-            this.render();
-            showToast('更新成功', 'success');
+    update: async function(fundCode, investment) {
+        try {
+            const response = await fetch(`/api/investments/${fundCode}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(investment)
+            });
+            const result = await response.json();
+            if (result.success) {
+                await this.load();
+                showToast('更新成功', 'success');
+            } else {
+                showToast(result.error || '更新失败', 'error');
+            }
+        } catch (error) {
+            showToast('更新失败: ' + error.message, 'error');
         }
     },
 
     // 删除记录
-    delete: function(id) {
-        this.data = this.data.filter(item => item.id !== id);
-        this.render();
-        showToast('删除成功', 'success');
+    delete: async function(fundCode) {
+        try {
+            const response = await fetch(`/api/investments/${fundCode}`, {
+                method: 'DELETE'
+            });
+            const result = await response.json();
+            if (result.success) {
+                await this.load();
+                showToast('删除成功', 'success');
+            } else {
+                showToast(result.error || '删除失败', 'error');
+            }
+        } catch (error) {
+            showToast('删除失败: ' + error.message, 'error');
+        }
     },
 
     // 计算仓位占比
@@ -65,10 +109,9 @@ const InvestmentManager = {
     },
 
     // CSV导入
-    importCSV: function(csvText) {
+    importCSV: async function(csvText) {
         try {
             const parsed = parseCSV(csvText);
-            // 验证数据格式
             const validData = parsed.filter(row => {
                 return Validator.required(row.fund_name || row['基金名称']) &&
                        Validator.fundCode(row.fund_code || row['基金代码']) &&
@@ -80,20 +123,40 @@ const InvestmentManager = {
                 return;
             }
 
-            this.data = validData.map(row => ({
-                id: Date.now() + Math.random(),
-                fund_name: row.fund_name || row['基金名称'] || '',
-                fund_code: row.fund_code || row['基金代码'] || '',
-                sector: row.sector || row['板块'] || '',
-                position: parseFloat(row.position || row['仓位'] || 0),
-                trade_type: row.trade_type || row['场内外'] || '',
-                market: row.market || row['市场'] || '',
-                risk_level: row.risk_level || row['风险等级'] || '中',
-                holding_plan: row.holding_plan || row['持有计划'] || '中期'
-            }));
+            let successCount = 0;
+            let skipCount = 0;
+            
+            for (const row of validData) {
+                const investment = {
+                    fund_code: row.fund_code || row['基金代码'] || '',
+                    fund_name: row.fund_name || row['基金名称'] || '',
+                    sector: row.sector || row['板块'] || '',
+                    position: parseFloat(row.position || row['仓位'] || 0),
+                    trade_type: row.trade_type || row['场内外'] || '',
+                    market: row.market || row['市场'] || '',
+                    risk_level: row.risk_level || row['风险等级'] || '中',
+                    holding_plan: row.holding_plan || row['持有计划'] || '中期'
+                };
+                
+                const response = await fetch('/api/investments', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(investment)
+                });
+                const result = await response.json();
+                if (result.success) {
+                    successCount++;
+                } else {
+                    skipCount++;
+                }
+            }
 
-            this.render();
-            showToast(`成功导入 ${this.data.length} 条记录`, 'success');
+            await this.load();
+            if (skipCount > 0) {
+                showToast(`导入完成: ${successCount} 条成功, ${skipCount} 条跳过（已存在）`, 'info');
+            } else {
+                showToast(`成功导入 ${successCount} 条记录`, 'success');
+            }
         } catch (error) {
             showToast('CSV解析失败: ' + error.message, 'error');
         }
@@ -192,10 +255,19 @@ const InvestmentManager = {
     },
 
     // 确认删除
-    confirmDelete: function(id) {
-        if (confirm('确定要删除这条记录吗？')) {
-            this.delete(id);
-        }
+    confirmDelete: function(fundCode) {
+        const item = this.data.find(d => d.fund_code === fundCode);
+        const name = item ? item.fund_name : '该持仓';
+        
+        document.getElementById('investment-delete-message').textContent = `确定要删除持仓「${name}」吗？`;
+        
+        const confirmBtn = document.getElementById('investment-delete-btn');
+        confirmBtn.onclick = () => {
+            document.getElementById('investment-delete-modal').close();
+            this.delete(fundCode);
+        };
+        
+        document.getElementById('investment-delete-modal').showModal();
     }
 };
 
@@ -209,7 +281,7 @@ const InvestmentUI = {
     currentChart: null,
     // 显示添加模态框
     showAddModal: function() {
-        document.getElementById('modal-title').textContent = '添加投资记录';
+        document.getElementById('modal-title').textContent = '添加持仓';
         document.getElementById('investment-form').reset();
         document.getElementById('investment-id').value = '';
         document.getElementById('investment-modal').showModal();
@@ -220,7 +292,7 @@ const InvestmentUI = {
         const investment = InvestmentManager.data.find(item => item.id === id);
         if (!investment) return;
 
-        document.getElementById('modal-title').textContent = '编辑投资记录';
+        document.getElementById('modal-title').textContent = '编辑持仓';
         document.getElementById('investment-id').value = investment.id;
         document.getElementById('fund-name').value = investment.fund_name;
         document.getElementById('fund-code').value = investment.fund_code;
