@@ -1,0 +1,84 @@
+<div id="investment-tab" class="tab-content" style="display: block;">
+    <div class="card bg-base-300/50 backdrop-blur-sm shadow-xl">
+        <div class="card-body">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="card-title gradient-text">投资计划</h2>
+                <div class="flex gap-2">
+                    <button class="btn btn-primary btn-sm" onclick="InvestmentUI.showAddModal()">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+                        </svg>
+                        添加
+                    </button>
+                    <label class="btn btn-secondary btn-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                        </svg>
+                        导入CSV
+                        <input type="file" accept=".csv" class="hidden" id="csv-import" onchange="InvestmentUI.handleImport(event)">
+                    </label>
+                    <button class="btn btn-accent btn-sm" onclick="InvestmentManager.exportCSV()">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+                        </svg>
+                        导出CSV
+                    </button>
+                    <button class="btn btn-warning btn-sm text-white" onclick="MarketManager.showModal()">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z" />
+                        </svg>
+                        管理市场
+                    </button>
+                </div>
+            </div>
+            <!-- 表格 -->
+            <div class="overflow-x-auto">
+                <table class="table table-zebra w-full">
+                    <thead>
+                        <tr>
+                            <th>基金名称</th>
+                            <th>基金代码</th>
+                            <th>板块</th>
+                            <th class="cursor-pointer" onclick="InvestmentUI.toggleSort('position')">
+                                仓位金额 <span id="sort-icon-position">↓</span>
+                            </th>
+                            <th>仓位占比</th>
+                            <th>场内外</th>
+                            <th>市场</th>
+                            <th class="cursor-pointer" onclick="InvestmentUI.toggleSort('risk_level')">
+                                风险等级 <span id="sort-icon-risk"></span>
+                            </th>
+                            <th class="cursor-pointer" onclick="InvestmentUI.toggleSort('holding_plan')">
+                                持有计划 <span id="sort-icon-plan"></span>
+                            </th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="investment-table-body">
+                        <!-- 动态生成 -->
+                    </tbody>
+                    <tfoot id="investment-table-footer">
+                        <!-- 汇总行 -->
+                    </tfoot>
+                </table>
+            </div>
+
+            <!-- 图表区域 -->
+            <div class="mt-8">
+                <h3 class="text-xl font-bold mb-4">数据可视化</h3>
+                <div class="flex gap-2 mb-4">
+                    <button class="btn btn-sm btn-outline" style="color: #f5f5dc;" onclick="InvestmentUI.renderChart('sector')">按板块</button>
+                    <button class="btn btn-sm btn-outline" style="color: #f5f5dc;" onclick="InvestmentUI.renderChart('risk_level')">按风险等级</button>
+                    <button class="btn btn-sm btn-outline" style="color: #f5f5dc;" onclick="InvestmentUI.renderChart('holding_plan')">按持有计划</button>
+                </div>
+                <div class="flex justify-center" style="max-width: 500px; max-height: 500px; margin: 0 auto;">
+                    <canvas id="investment-chart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 投资计划相关模态框 -->
+{% include 'partials/modal-investment.html' %}
+{% include 'partials/modal-market.html' %}
