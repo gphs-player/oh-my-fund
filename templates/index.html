@@ -36,6 +36,7 @@
                     <a role="tab" class="tab" data-tab="fund-select">多维选基</a>
                     <a role="tab" class="tab" data-tab="annualized">年化计算器</a>
                     <a role="tab" class="tab" data-tab="compound">复利计算器</a>
+                    <a role="tab" class="tab" data-tab="settings">设置</a>
                 </div>
             </div>
 
@@ -44,7 +45,7 @@
             {% include 'partials/tab-fund-select.html' %}
             {% include 'partials/tab-annualized.html' %}
             {% include 'partials/tab-compound.html' %}
-
+            {% include 'partials/tab-settings.html' %}
         </div>
     </div>
 
@@ -53,7 +54,7 @@
     <script src="{{ url_for('static', filename='js/investment.js') }}"></script>
     <script src="{{ url_for('static', filename='js/annualized.js') }}"></script>
     <script src="{{ url_for('static', filename='js/compound.js') }}"></script>
-
+    <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
     <script>
         // Tab切换逻辑 - 只选择有data-tab属性的主Tab
         document.querySelectorAll('[data-tab]').forEach(tab => {

@@ -89,35 +89,36 @@ body {
 }
 
 .backdrop-blur-md {
-    backdrop-filter: blur(16px);
+    /* --tw-backdrop-blur: blur(10px)!important; */
+    backdrop-filter: var(--tw-backdrop-blur);
     background: rgba(0, 0, 0, 0.05) !important; /* 进一步降低黑色背景透明度 */
 }
 
 /* 卡片增强 - 更亮的背景和霓虹边框 */
 .card {
     background: rgba(255, 255, 255, 0.08) !important; /* 使用白色半透明背景 */
-    border: 1px solid rgba(96, 165, 250, 0.4);
-    box-shadow: 0 0 30px rgba(96, 165, 250, 0.3);
+    border: 1px solid rgba(129, 140, 248, 0.4);
+    box-shadow: 0 0 30px rgba(129, 140, 248, 0.3);
 }
 
 /* 霓虹边框效果 */
 .neon-border {
     border: 2px solid transparent;
     background: linear-gradient(#1a1a2e, #1a1a2e) padding-box,
-                linear-gradient(45deg, #60a5fa, #a78bfa, #22d3ee) border-box;
+                linear-gradient(45deg, #818cf8, #a78bfa, #22d3ee) border-box;
     border-radius: 0.5rem;
 }
 
 /* 按钮悬停效果 - 增强发光 */
 .btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 10px 30px rgba(96, 165, 250, 0.5);
+    box-shadow: 0 10px 30px rgba(129, 140, 248, 0.5);
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, #60a5fa, #3b82f6);
+    background: linear-gradient(135deg, #818cf8, #6366f1);
     border: none;
-    box-shadow: 0 4px 15px rgba(96, 165, 250, 0.4);
+    box-shadow: 0 4px 15px rgba(129, 140, 248, 0.4);
     color: white !important;
 }
 
@@ -136,22 +137,21 @@ body {
 }
 
 .btn-outline {
-    border: 2px solid rgba(96, 165, 250, 0.5);
-    color: #60a5fa;
-    background: rgba(96, 165, 250, 0.05);
+    border: 2px solid rgba(129, 140, 248, 0.5);
+    color: #818cf8;
+    background: rgba(129, 140, 248, 0.05);
 }
 
 .btn-outline:hover {
-    background: rgba(96, 165, 250, 0.15);
-    border-color: #60a5fa;
-    color: #60a5fa;
+    background: rgba(129, 140, 248, 0.15);
+    border-color: #818cf8;
+    color: #818cf8;
 }
 
 /* 表格行悬停 - 更明显的高亮 */
 .table tbody tr:hover {
-    background-color: rgba(96, 165, 250, 0.2);
-    transform: scale(1.01);
-    box-shadow: 0 0 15px rgba(96, 165, 250, 0.3);
+    background-color: rgba(129, 140, 248, 0.2);
+    box-shadow: 0 0 15px rgba(129, 140, 248, 0.3);
 }
 
 /* 表格样式增强 */
@@ -160,18 +160,24 @@ body {
 }
 
 .table thead {
-    background: rgba(96, 165, 250, 0.15);
-    border-bottom: 2px solid rgba(96, 165, 250, 0.5);
+    background: rgba(129, 140, 248, 0.15);
+    border-bottom: 2px solid rgba(129, 140, 248, 0.5);
 }
 
 .table th {
-    color: #60a5fa !important;
+    color: #818cf8 !important;
     font-weight: 600;
+    font-size: 1rem;
 }
 
 .table tbody tr {
-    border-bottom: 1px solid rgba(96, 165, 250, 0.1);
+    border-bottom: 1px solid rgba(129, 140, 248, 0.1);
 }
+
+.table-zebra tbody tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.06);
+}
+
 
 /* Tab切换动画 */
 .tab-content {
@@ -195,7 +201,7 @@ body {
 
 /* 渐变文字增强 */
 .gradient-text {
-    background: linear-gradient(45deg, #60a5fa, #a78bfa, #22d3ee, #f472b6);
+    background: linear-gradient(45deg, #818cf8, #a78bfa, #22d3ee, #f472b6);
     background-size: 200% 200%;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -212,23 +218,53 @@ body {
     }
 }
 
+/* 流光溢彩文字效果 */
+.shimmer-text {
+    font-family: "Comic Sans MS", cursive, sans-serif;
+    background: linear-gradient(
+        90deg,
+        #818cf8 0%,
+        #a78bfa 15%,
+        #f472b6 30%,
+        #fb923c 45%,
+        #facc15 60%,
+        #4ade80 75%,
+        #22d3ee 90%,
+        #818cf8 100%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: shimmer 3s linear infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: -100% 50%;
+    }
+}
+
 /* 卡片悬停效果 */
 .card:hover {
     transform: translateY(-4px);
-    box-shadow: 0 20px 40px rgba(96, 165, 250, 0.3);
-    border-color: rgba(96, 165, 250, 0.6);
+    box-shadow: 0 20px 40px rgba(129, 140, 248, 0.3);
+    border-color: rgba(129, 140, 248, 0.6);
 }
 
 /* 输入框聚焦效果 - 霓虹发光 */
 .input:focus, .select:focus, .textarea:focus {
-    border-color: #60a5fa;
-    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.3), 0 0 20px rgba(96, 165, 250, 0.4);
+    border-color: #818cf8;
+    box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.3), 0 0 20px rgba(129, 140, 248, 0.4);
     background: rgba(255, 255, 255, 0.1);
 }
 
 .input, .select, .textarea {
     background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(96, 165, 250, 0.3);
+    border-color: rgba(129, 140, 248, 0.3);
     color: #e2e8f0;
 }
 
@@ -236,33 +272,34 @@ body {
 .tabs-bordered {
     background: transparent !important;
     border: none;
-    gap: 0.75rem; /* 减小Tab间距 */
+    gap: 1rem; /* 减小Tab间距 */
 }
 
 .tab {
     color: #cbd5e1; /* 改为更亮的灰色 */
     border: 2px solid rgba(148, 163, 184, 0.3);
     border-radius: 0.5rem;
+    font-size: 1rem;
     min-width: auto;
     transition: all 0.3s ease;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    line-height: 1;
+    line-height: 1.2rem;
 }
 
 .tab:hover {
-    border-color: rgba(96, 165, 250, 0.6);
-    color: #60a5fa;
+    border-color: rgba(129, 140, 248, 0.6);
+    color: #818cf8;
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(96, 165, 250, 0.3);
+    box-shadow: 0 4px 12px rgba(129, 140, 248, 0.3);
 }
 
 .tab-active {
     background: transparent !important;
-    color: #60a5fa !important;
-    border: 2px solid #60a5fa !important;
-    box-shadow: 0 0 20px rgba(96, 165, 250, 0.5), inset 0 0 20px rgba(96, 165, 250, 0.1);
+    color: #818cf8 !important;
+    border: 2px solid #818cf8 !important;
+    box-shadow: 0 0 20px rgba(129, 140, 248, 0.5), inset 0 0 20px rgba(129, 140, 248, 0.1);
     font-weight: 600;
 }
 
@@ -280,11 +317,30 @@ body {
 }
 
 .badge-info {
-    background: linear-gradient(135deg, #60a5fa, #3b82f6);
+    background: linear-gradient(135deg, #818cf8, #6366f1);
 }
 
 .badge-success {
     background: linear-gradient(135deg, #34d399, #10b981);
+}
+
+/* 持有计划徽章 - round stroke 样式 */
+.badge-outline.badge-success {
+    background: transparent;
+    border: 2px solid #10b981;
+    color: #34d399;
+}
+
+.badge-outline.badge-info {
+    background: transparent;
+    border: 2px solid #6366f1;
+    color: #818cf8;
+}
+
+.badge-outline.badge-warning {
+    background: transparent;
+    border: 2px solid #f59e0b;
+    color: #fbbf24;
 }
 
 /* 滚动条样式 */
@@ -298,7 +354,7 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-    background: linear-gradient(45deg, #60a5fa, #a78bfa);
+    background: linear-gradient(45deg, #818cf8, #a78bfa);
     border-radius: 4px;
 }
 
@@ -309,13 +365,87 @@ body {
 /* Alert样式增强 */
 .alert {
     background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(96, 165, 250, 0.5);
-    box-shadow: 0 4px 15px rgba(96, 165, 250, 0.3);
+    border: 1px solid rgba(129, 140, 248, 0.5);
+    box-shadow: 0 4px 15px rgba(129, 140, 248, 0.3);
 }
 
 /* 模态框增强 */
 .modal-box {
     background: rgba(30, 41, 59, 0.98) !important;
-    border: 1px solid rgba(96, 165, 250, 0.5);
-    box-shadow: 0 20px 60px rgba(96, 165, 250, 0.4);
+    border: 1px solid rgba(129, 140, 248, 0.5);
+    box-shadow: 0 20px 60px rgba(129, 140, 248, 0.4);
+    max-height: 90vh;
+    padding: 1.25rem;
+}
+
+.modal-box h3 {
+    margin-bottom: 0.75rem;
+    font-size: 1.1rem;
+}
+
+.modal-box .form-control {
+    margin-bottom: 0.5rem;
+}
+
+.modal-box .label {
+    padding: 0.25rem 0;
+}
+
+.modal-box .input,
+.modal-box .select {
+    height: 2.25rem;
+    min-height: 2.25rem;
+    padding: 0 0.75rem;
+    font-size: 0.875rem;
+}
+
+.modal-box .modal-action {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+}
+
+/* 年化计算器和复利计算器紧凑布局 */
+#annualized-tab .card-body,
+#compound-tab .card-body {
+    min-height: auto;
+    padding: 1.25rem;
+}
+
+#annualized-tab .form-control,
+#compound-tab .form-control {
+    margin-bottom: 0.5rem;
+}
+
+#annualized-tab .label,
+#compound-tab .label {
+    padding: 0.25rem 0;
+}
+
+#annualized-tab .input,
+#annualized-tab .select,
+#compound-tab .input,
+#compound-tab .select {
+    height: 2.25rem;
+    min-height: 2.25rem;
+    padding: 0 0.75rem;
+    font-size: 0.875rem;
+}
+
+#annualized-tab .space-y-4 > * + *,
+#compound-tab .space-y-4 > * + * {
+    margin-top: 0.5rem;
+}
+
+#annualized-tab .tabs-bordered,
+#compound-tab .divider {
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+#compound-tab .btn-outline {
+    margin-top: 0.5rem;
+}
+
+#compound-tab #compound-result {
+    margin-top: 1rem;
 }

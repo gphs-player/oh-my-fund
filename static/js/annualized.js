@@ -3,11 +3,11 @@ const AnnualizedCalculator = {
     calculateMethod1: function(event) {
         event.preventDefault();
 
-        const days = parseFloat(document.getElementById('days1').value);
+        const years = parseFloat(document.getElementById('years1').value);
         const totalReturn = parseFloat(document.getElementById('total-return1').value) / 100;
 
-        // 公式：年化收益率 = (1 + 总收益率) ^ (365 / 持有天数) - 1
-        const annualReturn = Math.pow(1 + totalReturn, 365 / days) - 1;
+        // 公式：年化收益率 = (1 + 总收益率) ^ (1 / 持有年数) - 1
+        const annualReturn = Math.pow(1 + totalReturn, 1 / years) - 1;
         const annualReturnPercent = (annualReturn * 100).toFixed(2);
 
         document.getElementById('result1-value').textContent = annualReturnPercent + '%';
@@ -19,7 +19,7 @@ const AnnualizedCalculator = {
         event.preventDefault();
 
         const initialNav = parseFloat(document.getElementById('initial-nav').value);
-        const days = parseFloat(document.getElementById('days2').value);
+        const years = parseFloat(document.getElementById('years2').value);
         const finalNav = parseFloat(document.getElementById('final-nav').value);
 
         if (initialNav <= 0) {
@@ -32,7 +32,7 @@ const AnnualizedCalculator = {
         const totalReturnPercent = (totalReturn * 100).toFixed(2);
 
         // 计算年化收益率
-        const annualReturn = Math.pow(1 + totalReturn, 365 / days) - 1;
+        const annualReturn = Math.pow(1 + totalReturn, 1 / years) - 1;
         const annualReturnPercent = (annualReturn * 100).toFixed(2);
 
         document.getElementById('result2-total').textContent = totalReturnPercent + '%';
