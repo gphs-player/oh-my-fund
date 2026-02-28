@@ -191,13 +191,13 @@ const InvestmentManager = {
                 <td><span class="badge badge-${this.getRiskBadgeColor(item.risk_level)}">${item.risk_level}</span></td>
                 <td><span class="badge badge-outline badge-${this.getHoldingPlanBadgeColor(item.holding_plan)}" style="border-radius: 5px;">${item.holding_plan}</span></td>
                 <td>
-                    <button class="btn btn-xs btn-ghost" onclick="InvestmentUI.showEditModal(${item.id})" title="编辑">
+                    <button class="btn btn-xs btn-ghost" onclick="InvestmentUI.showEditModal('${item.fund_code}')" title="编辑">
                         <svg class="h-5 w-5" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
                             <path d="M853.333333 501.333333c-17.066667 0-32 14.933333-32 32v320c0 6.4-4.266667 10.666667-10.666666 10.666667H170.666667c-6.4 0-10.666667-4.266667-10.666667-10.666667V213.333333c0-6.4 4.266667-10.666667 10.666667-10.666666h320c17.066667 0 32-14.933333 32-32s-14.933333-32-32-32H170.666667c-40.533333 0-74.666667 34.133333-74.666667 74.666666v640c0 40.533333 34.133333 74.666667 74.666667 74.666667h640c40.533333 0 74.666667-34.133333 74.666666-74.666667V533.333333c0-17.066667-14.933333-32-32-32z" fill="#00FFF0"/>
                             <path d="M405.333333 484.266667l-32 125.866666c-2.133333 10.666667 0 23.466667 8.533334 29.866667 6.4 6.4 14.933333 8.533333 23.466666 8.533333h8.533334l125.866666-32c6.4-2.133333 10.666667-4.266667 14.933334-8.533333l300.8-300.8c38.4-38.4 38.4-102.4 0-140.8-38.4-38.4-102.4-38.4-140.8 0L413.866667 469.333333c-4.266667 4.266667-6.4 8.533333-8.533334 14.933334z m59.733334 23.466666L761.6 213.333333c12.8-12.8 36.266667-12.8 49.066667 0 12.8 12.8 12.8 36.266667 0 49.066667L516.266667 558.933333l-66.133334 17.066667 14.933334-68.266667z" fill="#00FFF0"/>
                         </svg>
                     </button>
-                    <button class="btn btn-xs btn-ghost" onclick="InvestmentManager.confirmDelete(${item.id})" title="删除">
+                    <button class="btn btn-xs btn-ghost" onclick="InvestmentManager.confirmDelete('${item.fund_code}')" title="删除">
                         <svg class="h-5 w-5" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
                             <path d="M874.666667 241.066667h-202.666667V170.666667c0-40.533333-34.133333-74.666667-74.666667-74.666667h-170.666666c-40.533333 0-74.666667 34.133333-74.666667 74.666667v70.4H149.333333c-17.066667 0-32 14.933333-32 32s14.933333 32 32 32h53.333334V853.333333c0 40.533333 34.133333 74.666667 74.666666 74.666667h469.333334c40.533333 0 74.666667-34.133333 74.666666-74.666667V305.066667H874.666667c17.066667 0 32-14.933333 32-32s-14.933333-32-32-32zM416 170.666667c0-6.4 4.266667-10.666667 10.666667-10.666667h170.666666c6.4 0 10.666667 4.266667 10.666667 10.666667v70.4h-192V170.666667z m341.333333 682.666666c0 6.4-4.266667 10.666667-10.666666 10.666667H277.333333c-6.4 0-10.666667-4.266667-10.666666-10.666667V309.333333h490.666666V853.333333z" fill="#f87171"/>
                             <path d="M426.666667 736c17.066667 0 32-14.933333 32-32V490.666667c0-17.066667-14.933333-32-32-32s-32 14.933333-32 32v213.333333c0 17.066667 14.933333 32 32 32zM597.333333 736c17.066667 0 32-14.933333 32-32V490.666667c0-17.066667-14.933333-32-32-32s-32 14.933333-32 32v213.333333c0 17.066667 14.933333 32 32 32z" fill="#f87171"/>
@@ -284,18 +284,20 @@ const InvestmentUI = {
         document.getElementById('modal-title').textContent = '添加持仓';
         document.getElementById('investment-form').reset();
         document.getElementById('investment-id').value = '';
+        document.getElementById('fund-code').disabled = false;  // 添加时启用基金代码
         document.getElementById('investment-modal').showModal();
     },
 
     // 显示编辑模态框
-    showEditModal: function(id) {
-        const investment = InvestmentManager.data.find(item => item.id === id);
+    showEditModal: function(fundCode) {
+        const investment = InvestmentManager.data.find(item => item.fund_code === fundCode);
         if (!investment) return;
 
         document.getElementById('modal-title').textContent = '编辑持仓';
-        document.getElementById('investment-id').value = investment.id;
+        document.getElementById('investment-id').value = fundCode;
         document.getElementById('fund-name').value = investment.fund_name;
         document.getElementById('fund-code').value = investment.fund_code;
+        document.getElementById('fund-code').disabled = true;  // 编辑时禁用基金代码修改
         document.getElementById('sector').value = investment.sector;
         document.getElementById('position').value = investment.position;
         document.getElementById('trade-type').value = investment.trade_type || '';
@@ -306,10 +308,10 @@ const InvestmentUI = {
     },
 
     // 处理表单提交
-    handleSubmit: function(event) {
+    handleSubmit: async function(event) {
         event.preventDefault();
 
-        const id = document.getElementById('investment-id').value;
+        const editingFundCode = document.getElementById('investment-id').value;
         const investment = {
             fund_name: document.getElementById('fund-name').value,
             fund_code: document.getElementById('fund-code').value,
@@ -321,12 +323,13 @@ const InvestmentUI = {
             holding_plan: document.getElementById('holding-plan').value
         };
 
-        if (id) {
-            InvestmentManager.update(parseInt(id), investment);
+        if (editingFundCode) {
+            await InvestmentManager.update(editingFundCode, investment);
         } else {
-            InvestmentManager.add(investment);
+            await InvestmentManager.add(investment);
         }
 
+        document.getElementById('fund-code').disabled = false;
         document.getElementById('investment-modal').close();
     },
 
