@@ -20,7 +20,19 @@ open http://localhost:5001       # 访问
 fund-calculator/
 ├── app.py                 # Flask 入口 + API 接口 (端口 5001)
 ├── data/
-│   └── markets.csv        # 市场列表 (服务端存储，CSV 格式)
+│   ├── markets.csv        # 市场列表 (服务端存储)
+│   ├── investments.csv    # 持仓数据 (服务端存储，fund_code 为主键)
+│   ├── datasources.csv    # 数据源配置
+│   └── settings.csv       # 全局设置
+├── warehouse/             # 数据仓库层
+│   ├── __init__.py
+│   ├── cache.py           # FundCache 缓存管理
+│   ├── repository.py      # FundRepository 统一入口
+│   └── adapters/          # 数据源适配器
+│       ├── base.py        # BaseDataSource 基类
+│       ├── factory.py     # 工厂方法 + 注册表
+│       ├── lixinger.py    # 理杏仁适配器
+│       └── tushare.py     # Tushare 适配器
 ├── templates/
 │   ├── index.html         # 主页面模板 (Jinja2)
 │   └── partials/          # 可复用模板片段
@@ -28,9 +40,10 @@ fund-calculator/
 │   ├── css/style.css      # 自定义样式 (毛玻璃、霓虹效果)
 │   └── js/
 │       ├── utils.js       # 工具函数 (CSV、验证、Toast)
-│       ├── investment.js  # 投资计划 + 市场管理
+│       ├── investment.js  # 我的持仓 + 市场管理
 │       ├── annualized.js  # 年化计算器
-│       └── compound.js    # 复利计算器
+│       ├── compound.js    # 复利计算器
+│       └── settings.js    # 设置页管理
 └── docs/plans/            # 设计文档
 ```
 
@@ -41,7 +54,7 @@ fund-calculator/
 | 后端 | Flask 3.0.0 (页面渲染 + 市场列表 API) |
 | 前端 | Tailwind CSS (CDN) + DaisyUI 4.6.0 |
 | 图表 | Chart.js 4.4.1 |
-| 存储 | 服务端 CSV (市场) + 前端内存 (投资数据) |
+| 存储 | 服务端 CSV (市场、持仓、数据源、设置) |
 
 ## API 接口
 
@@ -49,6 +62,22 @@ fund-calculator/
 |------|------|------|
 | GET | `/api/markets` | 获取市场列表 |
 | POST | `/api/markets` | 保存市场列表 (JSON 数组，全量覆盖) |
+| GET | `/api/investments` | 获取所有持仓 |
+| POST | `/api/investments` | 添加持仓 (fund_code 重复则报错) |
+| PUT | `/api/investments/<fund_code>` | 更新持仓 |
+| DELETE | `/api/investments/<fund_code>` | 删除持仓 |
+| GET | `/api/datasources` | 获取数据源列表 |
+| POST | `/api/datasources` | 添加数据源 |
+| GET | `/api/datasources/<id>` | 获取单个数据源详情 |
+| PUT | `/api/datasources/<id>` | 更新数据源 |
+| DELETE | `/api/datasources/<id>` | 删除数据源 |
+| POST | `/api/datasources/<id>/activate` | 激活数据源 |
+| POST | `/api/datasources/<id>/deactivate` | 停用数据源 |
+| POST | `/api/datasources/<id>/test` | 测试数据源连接 |
+| GET | `/api/settings` | 获取全局设置 |
+| PUT | `/api/settings` | 更新全局设置 |
+| GET | `/api/cache/info` | 获取缓存状态 |
+| POST | `/api/cache/refresh` | 手动刷新缓存 |
 
 ---
 
@@ -79,13 +108,12 @@ document.addEventListener('DOMContentLoaded', function() { ModuleName.init(); })
 | Python 函数 | snake_case | `read_markets`, `ensure_markets_file` |
 | Python 常量 | UPPER_SNAKE_CASE | `MARKETS_FILE`, `DEFAULT_MARKETS` |
 
-### 投资记录字段
+### 持仓记录字段
 
 ```javascript
 {
-    id: Number,             // 时间戳 ID
+    fund_code: String,      // 基金代码 (5-8位数字，主键)
     fund_name: String,      // 基金名称 (必填)
-    fund_code: String,      // 基金代码 (5-8位数字)
     sector: String,         // 板块
     position: Number,       // 仓位金额 (>=0)
     trade_type: String,     // "场内" | "场外"

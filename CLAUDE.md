@@ -17,17 +17,31 @@
 fund-calculator/
 ├── app.py                 # Flask 入口 (端口 5001)
 ├── data/
-│   └── markets.csv        # 市场列表 (服务端持久化)
+│   ├── markets.csv        # 市场列表 (服务端持久化)
+│   ├── investments.csv    # 持仓数据 (服务端持久化，fund_code 为主键)
+│   ├── datasources.csv    # 数据源配置
+│   └── settings.csv       # 全局设置
+├── warehouse/             # 数据仓库层
+│   ├── __init__.py
+│   ├── cache.py           # FundCache 缓存管理
+│   ├── repository.py      # FundRepository 统一入口
+│   └── adapters/          # 数据源适配器
+│       ├── base.py        # BaseDataSource 基类
+│       ├── factory.py     # 工厂方法 + 注册表
+│       ├── lixinger.py    # 理杏仁适配器
+│       └── tushare.py     # Tushare 适配器
 ├── templates/
-│   └── index.html         # 主页面模板
+│   ├── index.html         # 主页面模板
+│   └── partials/          # 可复用模板片段
 ├── static/
 │   ├── css/
 │   │   └── style.css      # 自定义样式 (毛玻璃、霓虹效果)
 │   ├── js/
 │   │   ├── utils.js       # 工具函数 (CSV、验证、Toast)
-│   │   ├── investment.js  # 投资计划模块 + 市场管理
+│   │   ├── investment.js  # 我的持仓 + 市场管理
 │   │   ├── annualized.js  # 年化计算器模块
-│   │   └── compound.js    # 复利计算器模块
+│   │   ├── compound.js    # 复利计算器模块
+│   │   └── settings.js    # 设置页管理
 │   └── images/
 │       ├── logo.svg       # 渐变色钱袋 Logo
 │       ├── favicon.svg    # 网站图标
@@ -43,17 +57,28 @@ fund-calculator/
 | GET | `/` | 主页面 |
 | GET | `/api/markets` | 获取市场列表 |
 | POST | `/api/markets` | 保存市场列表 (全量覆盖) |
+| GET | `/api/investments` | 获取所有持仓 |
+| POST | `/api/investments` | 添加持仓 (fund_code 重复则报错) |
+| PUT | `/api/investments/<fund_code>` | 更新持仓 |
+| DELETE | `/api/investments/<fund_code>` | 删除持仓 |
+| GET | `/api/datasources` | 获取数据源列表 |
+| POST | `/api/datasources` | 添加数据源 |
+| PUT | `/api/datasources/<id>` | 更新数据源 |
+| DELETE | `/api/datasources/<id>` | 删除数据源 |
+| GET | `/api/settings` | 获取全局设置 |
+| PUT | `/api/settings` | 更新全局设置 |
+| GET | `/api/cache/info` | 获取缓存状态 |
+| POST | `/api/cache/refresh` | 手动刷新缓存 |
 
 ## 功能模块
 
-### 1. 投资计划
-- 基金投资记录的增删改查
-- 字段: 基金名称、基金代码、板块、仓位金额、场内外、市场、风险等级、持有计划
+### 1. 我的持仓
+- 基金持仓记录的增删改查（数据持久化到服务端）
+- 字段: 基金名称、基金代码(主键)、板块、仓位金额、场内外、市场、风险等级、持有计划
 - 按仓位金额/风险等级/持有计划排序
 - CSV 导入导出 (带时间戳命名)
 - 饼图可视化 (按板块/风险等级/持有计划)
-- **市场管理**: 工具栏"管理市场"按钮，可增删市场选项并同步服务端
-
+- **市场管理**: 工具栏“管理市场”按钮，可增删市场选项并同步服务端
 ### 2. 多维选基 (待实现)
 - 预留 Tab，内容待开发
 
@@ -67,6 +92,10 @@ fund-calculator/
 - 默认计算 20 年
 - 折线图展示增长曲线 (含汇总线)
 - 表格展示每年明细 (金额自动转换为万/亿单位)
+
+### 5. 设置
+- 数据源管理: 添加/编辑/删除/激活数据源 (理杏仁、Tushare)
+- 缓存设置: 缓存过期时间配置 + 手动刷新
 
 ## UI 特点
 
@@ -103,7 +132,8 @@ from app import app as application
 
 ## 开发注意事项
 
-- 投资数据在前端内存中，刷新页面后清空
+- 持仓数据存储在服务端 `data/investments.csv`，刷新页面不会丢失
 - 市场列表存储在服务端 `data/markets.csv`
+- 数据源配置存储在 `data/datasources.csv`
 - Tab 切换使用 `[data-tab]` 和 `[data-subtab]` 属性选择器区分
 - 金额显示使用 `formatMoney()` 自动转换单位
