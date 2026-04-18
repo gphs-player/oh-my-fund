@@ -40,43 +40,41 @@
             </div>
         </div>
         
-        <!-- 缓存设置 -->
+        <!-- 缓存 -->
         <div class="card neon-border">
-            <div class="card-body">
-                <h2 class="card-title text-lg mb-4">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                    </svg>
-                    缓存设置
-                </h2>
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <!-- 缓存失效时间 -->
-                    <div class="form-control">
-                        <label class="label">
-                            <span class="label-text">缓存失效时间（天）</span>
-                        </label>
-                        <div class="flex gap-2">
-                            <input type="number" id="cache-expire-days" class="input input-bordered w-24" min="1" max="365" value="7">
+            <div class="card-body py-3" style="min-height: auto;">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <!-- 左侧标题 -->
+                    <h2 class="card-title text-base m-0">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        缓存
+                    </h2>
+                    
+                    <!-- 右侧控件组 -->
+                    <div class="flex flex-wrap items-center gap-3">
+                        <!-- 缓存状态 -->
+                        <span id="cache-status" class="text-sm text-white">加载中...</span>
+
+                        <!-- 缓存失效时间 -->
+                        <div class="flex items-center gap-2">
+                            <input type="number" id="cache-expire-days" class="input input-bordered input-sm w-16" min="1" max="365" value="7">
+                            <span class="text-sm text-white">天</span>
                             <button class="btn btn-outline btn-sm" onclick="SettingsManager.saveExpireDays()">保存</button>
                         </div>
-                    </div>
-                    
-                    <!-- 缓存状态 -->
-                    <div class="form-control">
-                        <label class="label">
-                            <span class="label-text">缓存状态</span>
-                        </label>
-                        <div class="flex items-center gap-2">
-                            <span id="cache-status" class="text-sm text-gray-400">加载中...</span>
-                            <button class="btn btn-accent btn-sm" onclick="SettingsManager.refreshCache()">
-                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                                </svg>
-                                手动刷新
-                            </button>
-                        </div>
+                        
+                        <!-- 分隔线 -->
+                        <div class="w-px h-5 bg-gray-600"></div>
+                        
+                        <!-- 手动刷新 -->
+                        <button class="btn btn-accent btn-sm" onclick="SettingsManager.refreshCache()">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                            </svg>
+                            刷新
+                        </button>
                     </div>
                 </div>
             </div>
@@ -116,6 +114,21 @@
                 <button type="submit" class="btn btn-primary">保存</button>
             </div>
         </form>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>关闭</button>
+    </form>
+</dialog>
+
+<!-- 删除确认模态框 -->
+<dialog id="delete-confirm-modal" class="modal">
+    <div class="modal-box bg-base-300/90 backdrop-blur-md">
+        <h3 class="font-bold text-lg mb-4 text-error">确认删除</h3>
+        <p class="py-4" id="delete-confirm-message">确定要删除这个数据源吗？</p>
+        <div class="modal-action">
+            <button type="button" class="btn" onclick="document.getElementById('delete-confirm-modal').close()">取消</button>
+            <button type="button" class="btn btn-error" id="delete-confirm-btn">删除</button>
+        </div>
     </div>
     <form method="dialog" class="modal-backdrop">
         <button>关闭</button>

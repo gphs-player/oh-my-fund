@@ -2,7 +2,7 @@
     <div class="card bg-base-300/50 backdrop-blur-sm shadow-xl">
         <div class="card-body">
             <div class="flex justify-between items-center mb-4">
-                <h2 class="card-title gradient-text">投资计划</h2>
+                <h2 class="card-title gradient-text">我的持仓</h2>
                 <div class="flex gap-2">
                     <button class="btn btn-primary btn-sm" onclick="InvestmentUI.showAddModal()">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -82,3 +82,18 @@
 <!-- 投资计划相关模态框 -->
 {% include 'partials/modal-investment.html' %}
 {% include 'partials/modal-market.html' %}
+
+<!-- 删除确认模态框 -->
+<dialog id="investment-delete-modal" class="modal">
+    <div class="modal-box bg-base-300/90 backdrop-blur-md">
+        <h3 class="font-bold text-lg mb-4 text-error">确认删除</h3>
+        <p class="py-4" id="investment-delete-message">确定要删除这条持仓记录吗？</p>
+        <div class="modal-action">
+            <button type="button" class="btn" onclick="document.getElementById('investment-delete-modal').close()">取消</button>
+            <button type="button" class="btn btn-error" id="investment-delete-btn">删除</button>
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>关闭</button>
+    </form>
+</dialog>

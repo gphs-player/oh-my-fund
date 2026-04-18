@@ -30,3 +30,7 @@ class TushareDataSource(BaseDataSource):
         # TODO: 实现 Tushare API 调用
         # 目前返回模拟数据，待接入真实 API
         raise NotImplementedError("Tushare API 待实现，请先配置账户并参考 Tushare 文档")
+
+    def get_fund_overview(self, fund_code: str) -> dict[str, str]:
+        """获取单只基金基本信息。"""
+        raise NotImplementedError("Tushare 基金基本信息接口待实现，请参考 Tushare 文档")

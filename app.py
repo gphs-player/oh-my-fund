@@ -13,6 +13,9 @@ MARKETS_FILE = os.path.join(os.path.dirname(__file__), 'data', 'markets.csv')
 
 # 默认市场列表
 DEFAULT_MARKETS = ['美股', 'A股', '亚太', '港股', '全球']
+DEFAULT_DATASOURCE_TYPE = 'Default'
+DEFAULT_DATASOURCE_NAME = '默认数据源'
+LEGACY_DEFAULT_DATASOURCE_TYPES = {'default', DEFAULT_DATASOURCE_TYPE}
 
 
 def ensure_markets_file():
@@ -216,6 +219,71 @@ def ensure_datasources_file():
         with open(DATASOURCES_FILE, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerow(['id', 'name', 'type', 'config', 'is_active'])
+    ensure_default_datasource_record()
+
+
+def build_default_datasource(next_id):
+    """构建默认数据源记录"""
+    return {
+        'id': next_id,
+        'name': DEFAULT_DATASOURCE_NAME,
+        'type': DEFAULT_DATASOURCE_TYPE,
+        'config': {},
+        'is_active': False
+    }
+
+
+def is_builtin_datasource(datasource):
+    """判断是否为系统内置数据源"""
+    return datasource.get('type') in LEGACY_DEFAULT_DATASOURCE_TYPES
+
+
+def ensure_default_datasource_record():
+    """确保默认数据源记录存在且唯一"""
+    with open(DATASOURCES_FILE, 'r', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        datasources = []
+        for row in reader:
+            datasources.append({
+                'id': int(row['id']),
+                'name': row['name'],
+                'type': row['type'],
+                'config': json.loads(row['config']),
+                'is_active': row['is_active'] == 'true'
+            })
+
+    default_datasources = [ds for ds in datasources if is_builtin_datasource(ds)]
+    changed = False
+
+    for ds in default_datasources:
+        if ds['type'] != DEFAULT_DATASOURCE_TYPE:
+            ds['type'] = DEFAULT_DATASOURCE_TYPE
+            changed = True
+
+    if not default_datasources:
+        next_id = max((ds['id'] for ds in datasources), default=0) + 1
+        datasources.append(build_default_datasource(next_id))
+        changed = True
+    elif len(default_datasources) > 1:
+        primary_default = default_datasources[0]
+        datasources = [
+            ds for ds in datasources
+            if not is_builtin_datasource(ds) or ds['id'] == primary_default['id']
+        ]
+        changed = True
+
+    if changed:
+        with open(DATASOURCES_FILE, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['id', 'name', 'type', 'config', 'is_active'])
+            for ds in datasources:
+                writer.writerow([
+                    ds['id'],
+                    ds['name'],
+                    ds['type'],
+                    json.dumps(ds['config'], ensure_ascii=False),
+                    'true' if ds['is_active'] else 'false'
+                ])
 
 
 def read_datasources():
@@ -295,6 +363,7 @@ def write_settings(settings):
 # =====================
 # 基金仓库实例
 # =====================
+ensure_datasources_file()
 fund_repository = FundRepository()
 
 
@@ -319,7 +388,8 @@ def list_datasources():
             'id': ds['id'],
             'name': ds['name'],
             'type': ds['type'],
-            'is_active': ds['is_active']
+            'is_active': ds['is_active'],
+            'is_builtin': is_builtin_datasource(ds)
         }
         safe_datasources.append(safe_ds)
     return jsonify(safe_datasources)
@@ -333,6 +403,9 @@ def add_datasource():
         return jsonify({'error': '缺少必要字段'}), 400
     
     datasources = read_datasources()
+    if data['type'] == DEFAULT_DATASOURCE_TYPE:
+        return jsonify({'error': '默认数据源由系统内置管理，不能重复添加'}), 400
+
     new_ds = {
         'id': get_next_datasource_id(),
         'name': data['name'],
@@ -344,6 +417,16 @@ def add_datasource():
     write_datasources(datasources)
     
     return jsonify({'success': True, 'id': new_ds['id']})
+
+
+@app.route('/api/datasources/<int:ds_id>', methods=['GET'])
+def get_datasource(ds_id):
+    """获取单个数据源详情（含配置，用于编辑）"""
+    datasources = read_datasources()
+    for ds in datasources:
+        if ds['id'] == ds_id:
+            return jsonify({**ds, 'is_builtin': is_builtin_datasource(ds)})
+    return jsonify({'error': '数据源不存在'}), 404
 
 
 @app.route('/api/datasources/<int:ds_id>', methods=['PUT'])
@@ -371,11 +454,13 @@ def update_datasource(ds_id):
 def delete_datasource(ds_id):
     """删除数据源"""
     datasources = read_datasources()
-    new_datasources = [ds for ds in datasources if ds['id'] != ds_id]
-    
-    if len(new_datasources) == len(datasources):
+    target = next((ds for ds in datasources if ds['id'] == ds_id), None)
+    if target is None:
         return jsonify({'error': '数据源不存在'}), 404
-    
+    if is_builtin_datasource(target):
+        return jsonify({'error': '默认数据源不允许删除'}), 400
+
+    new_datasources = [ds for ds in datasources if ds['id'] != ds_id]
     write_datasources(new_datasources)
     fund_repository.reload_datasource()
     return jsonify({'success': True})
@@ -496,6 +581,16 @@ def get_funds():
         return jsonify(funds)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/funds/<fund_code>/overview', methods=['GET'])
+def get_fund_overview(fund_code):
+    """获取单只基金基本信息"""
+    try:
+        data = fund_repository.get_fund_overview(fund_code)
+        return jsonify({'success': True, 'fund_code': fund_code, 'data': data})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
 
 
 if __name__ == '__main__':

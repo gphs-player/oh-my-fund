@@ -94,6 +94,21 @@ class FundRepository:
         self.cache.set(data)
         return data
 
+    def get_fund_overview(self, fund_code: str) -> dict[str, str]:
+        """
+        获取单只基金基本信息
+
+        Args:
+            fund_code: 基金代码
+
+        Returns:
+            原始键值表
+        """
+        if self.datasource is None:
+            raise RuntimeError("当前没有激活的数据源")
+
+        return self.datasource.get_fund_overview(fund_code)
+
     def get_cache_info(self) -> dict:
         """
         获取缓存状态

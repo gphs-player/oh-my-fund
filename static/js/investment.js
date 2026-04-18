@@ -280,12 +280,19 @@ const InvestmentUI = {
     },
     currentChart: null,
     // 显示添加模态框
-    showAddModal: function() {
+    showAddModal: function(prefill = {}) {
         document.getElementById('modal-title').textContent = '添加持仓';
         document.getElementById('investment-form').reset();
         document.getElementById('investment-id').value = '';
         document.getElementById('fund-code').disabled = false;  // 添加时启用基金代码
+        document.getElementById('fund-name').value = prefill.fund_name || '';
+        document.getElementById('fund-code').value = prefill.fund_code || '';
         document.getElementById('investment-modal').showModal();
+
+        const focusField = document.getElementById(prefill.fund_code || prefill.fund_name ? 'sector' : 'fund-name');
+        if (focusField) {
+            setTimeout(() => focusField.focus(), 0);
+        }
     },
 
     // 显示编辑模态框

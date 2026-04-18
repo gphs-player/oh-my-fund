@@ -1,149 +1,158 @@
-# 基金理财计算器
+# 1 一个亿小目标
 
-基于Flask的个人基金理财系统，采用后端渲染架构，所有业务逻辑在前端完成。
+个人基金理财计算器：Flask 后端渲染 + 前端业务逻辑，服务端 CSV 持久化（市场、持仓、数据源、设置），支持基金列表缓存、数据源切换、基金基本信息抓取与多维选基详情弹层。
 
-## 功能特性
+## 1.1 功能概览
 
-### 1. 投资计划模块
-- 表格展示所有投资记录
-- 支持添加、编辑、删除记录
-- 仓位列可点击排序（升序/降序）
-- 自动计算仓位占比
-- CSV导入导出功能
-- 数据可视化（按板块/风险等级/持有计划的饼图）
+### 1.1.1 我的持仓
 
-### 2. 年化计算器
-- 方式一：根据持有周期和总收益率计算年化收益率
-- 方式二：根据期初净值、持有周期、期末净值计算年化收益率
+- 持仓增删改查（`fund_code` 为主键）
+- CSV 导入/导出
+- 仓位合计与占比计算
+- 图表：按板块 / 风险等级 / 持有计划（Chart.js 饼图）
+- 市场管理（用于持仓表单下拉）
+- 从「多维选基」一键跳转并预填“添加持仓”弹框
 
-### 3. 复利计算器
-- 支持多个投资项对比
-- 动态添加/删除投资项
-- Chart.js绘制折线图
-- 显示详细数据表格
-- 默认计算年限：20年
+### 1.1.2 多维选基
 
-## 技术栈
+- 进入 Tab 后懒加载基金列表（`/api/funds`）
+- 关键字搜索（基金代码/名称）
+- 基金类型筛选
+- 分页与每页条数切换
+- 行内“添加持仓”快捷入口
+- 行内“详情”弹层（展示基金基本信息原始键值表）
 
-- **后端**: Flask 3.0.0
-- **前端UI**: Tailwind CSS + DaisyUI
-- **图表**: Chart.js
-- **数据存储**: localStorage + CSV导入导出
+### 1.1.3 计算器
 
-## 安装和运行
+- 主 Tab 已合并为「计算器」
+- 子入口一：年化收益率计算器
+  - 方式一：持有周期 + 总收益率 -> 年化
+  - 方式二：期初净值 + 期末净值 + 持有周期 -> 总收益率 + 年化
+- 子入口二：复利计算器
+  - 多投资项对比
+  - 折线图 + 明细表格
+  - 动态添加/删除投资项
 
-### 1. 安装依赖
+### 1.1.4 设置
+
+- 数据源管理：新增/编辑/删除、启用/停用、测试连接
+- 缓存管理：查看缓存状态、设置过期天数、手动刷新基金缓存
+
+## 1.2 技术栈
+
+- 后端：Flask 3.0.0（模板渲染 + API）
+- 前端：Tailwind CSS（CDN）+ DaisyUI
+- 图表：Chart.js
+- 存储：服务端 CSV（`data/` 下文件）
+
+## 1.3 运行
 
 ```bash
 pip install -r requirements.txt
+python3 app.py
 ```
 
-### 2. 启动服务
+浏览器访问：`http://localhost:5001`
 
-```bash
-python app.py
+说明：
+
+- 本机若没有 `python` 命令，使用 `python3`
+- 项目没有自动化测试，修改后请按“手动验证清单”自测
+
+## 1.4 数据与持久化
+
+所有数据默认写入项目目录下的 `data/`：
+
+- `data/markets.csv`：市场列表
+- `data/investments.csv`：持仓数据（`fund_code` 主键）
+- `data/datasources.csv`：数据源配置（`is_active=true` 表示当前启用）
+- `data/settings.csv`：全局设置（例如缓存过期天数）
+- `data/funds_list_cache_YYYY_MM_DD.csv`：基金列表缓存（自动生成）
+
+## 1.5 数据源与缓存
+
+基金列表由数据仓库层统一提供（`warehouse/`）：
+
+- 默认数据源：东方财富基金列表 + 基本概况（已实现，可直接使用）
+- `tushare` / `lixinger`：适配器占位，尚未接入真实 API（调用会报 `NotImplementedError`）
+- 缓存：内存 + CSV；是否过期由 `settings.csv` 的 `cache_expire_days` 控制，默认 7 天
+- 数据源抽象层强制能力：
+  - `get_fund_list()`
+  - `get_fund_overview(fund_code)`
+
+### 1.5.1 基金基本信息
+
+- 仓库层统一入口：`FundRepository.get_fund_overview(fund_code)`
+- 默认数据源通过东方财富“基本概况”页抓取原始键值表
+- 辅助脚本：`tools/extract_fund_overview.py`
+- 返回结构为原始键值表，例如：
+
+```json
+{
+  "基金全称": "...",
+  "基金简称": "...",
+  "基金代码": "...",
+  "基金类型": "..."
+}
 ```
 
-### 3. 访问应用
+## 1.6 API
 
-打开浏览器访问：http://localhost:5001
+### 1.6.1 市场
 
-## 使用说明
+- `GET /api/markets`：获取市场列表
+- `POST /api/markets`：保存市场列表（JSON 数组，全量覆盖）
 
-### 投资计划
+### 1.6.2 持仓
 
-1. **添加记录**：点击"添加"按钮，填写基金信息
-2. **编辑记录**：点击表格中的"编辑"按钮
-3. **删除记录**：点击表格中的"删除"按钮
-4. **排序**：点击"仓位"列头进行升序/降序排序
-5. **CSV导入**：点击"导入CSV"按钮，选择CSV文件
-6. **CSV导出**：点击"导出CSV"按钮，下载带时间戳的CSV文件
-7. **数据可视化**：点击按钮切换不同维度的饼图
+- `GET /api/investments`：获取所有持仓
+- `POST /api/investments`：添加持仓（`fund_code` 重复会报错）
+- `PUT /api/investments/<fund_code>`：更新持仓
+- `DELETE /api/investments/<fund_code>`：删除持仓
 
-#### CSV文件格式
+### 1.6.3 数据源
 
-```csv
-fund_name,fund_code,sector,position,risk_level,holding_plan,tags
-基金A,000001,科技,30,高,长期,AI
-基金B,000002,医疗,20,中,中期,医药
+- `GET /api/datasources/types`：获取支持的数据源类型
+- `GET /api/datasources`：获取数据源列表（不返回敏感配置）
+- `POST /api/datasources`：添加数据源
+- `GET /api/datasources/<id>`：获取单个数据源详情（含配置）
+- `PUT /api/datasources/<id>`：更新数据源
+- `DELETE /api/datasources/<id>`：删除数据源
+- `POST /api/datasources/<id>/activate`：激活数据源（自动停用其它）
+- `POST /api/datasources/<id>/deactivate`：停用数据源
+- `POST /api/datasources/<id>/test`：测试数据源连接
+
+### 1.6.4 设置与缓存
+
+- `GET /api/settings`：获取全局设置
+- `PUT /api/settings`：更新全局设置
+- `GET /api/cache/info`：获取缓存状态
+- `POST /api/cache/refresh`：手动刷新缓存
+- `GET /api/funds`：获取基金列表（走缓存逻辑）
+- `GET /api/funds/<fund_code>/overview`：获取单只基金基本信息（原始键值表）
+
+## 1.7 前端约定（强制）
+
+所有 JS 模块使用对象字面量模式：
+
+```javascript
+const ModuleName = {
+    init: function() { /* ... */ }
+};
+document.addEventListener('DOMContentLoaded', function() { ModuleName.init(); });
 ```
 
-### 年化计算器
+## 1.8 手动验证清单
 
-**方式一：持有周期+总收益率**
-- 输入持有周期（天数）
-- 输入总收益率（%）
-- 点击"计算"查看年化收益率
+- Tab 切换正常（我的持仓 / 多维选基 / 计算器 / 设置）
+- 计算器二级入口切换正常（年化计算器 / 复利计算器）
+- 持仓新增/编辑/删除正常，重复基金代码会提示错误
+- CSV 导入/导出数据完整
+- 市场管理（添加/删除/保存）正常，持仓表单市场下拉可用
+- 图表正常渲染（持仓饼图、复利折线图）
+- 设置页数据源管理与缓存刷新正常
+- 多维选基基金详情弹层正常（加载动画 / 双列字段 / 关闭）
 
-**方式二：期初期末净值**
-- 输入期初净值
-- 输入持有周期（天数）
-- 输入期末净值
-- 点击"计算"查看总收益率和年化收益率
+## 1.9 备注
 
-### 复利计算器
-
-1. 设置计算年限（默认20年）
-2. 添加投资项（可添加多个）
-3. 填写每个投资项的信息：
-   - 名称
-   - 初始金额
-   - 预计年化收益率（%）
-   - 年末追加金额
-4. 点击"计算复利"查看折线图和数据表格
-
-## 数据存储
-
-- 投资计划数据存储在浏览器的localStorage中
-- 页面刷新后数据自动恢复
-- 支持CSV导入导出进行数据备份和迁移
-- CSV文件命名格式：`investments_YYYYMMDD_HHMMSS.csv`
-
-## UI特色
-
-- 深色主题
-- 毛玻璃效果（backdrop-blur）
-- 科技感渐变色
-- 流畅的动画效果
-- 响应式设计
-
-## 项目结构
-
-```
-fund-calculator/
-├── app.py                      # Flask应用入口
-├── requirements.txt            # 依赖列表
-├── static/                     # 静态文件
-│   ├── css/
-│   │   └── style.css          # 自定义样式
-│   ├── js/
-│   │   ├── investment.js      # 投资计划模块
-│   │   ├── annualized.js      # 年化计算器
-│   │   ├── compound.js        # 复利计算器
-│   │   └── utils.js           # 工具函数
-│   └── images/
-│       ├── background.jpg
-│       └── favicon.svg
-└── templates/
-    └── index.html             # 主页面
-```
-
-## 注意事项
-
-- 本系统为单用户本地使用设计
-- 数据存储在浏览器localStorage中，清除浏览器数据会导致数据丢失
-- 建议定期使用CSV导出功能备份数据
-- 基金代码必须为5-8位数字
-- 仓位范围为0-100
-
-## 开发计划
-
-- [ ] 基金严选模块（接入开放API）
-- [ ] 数据导出为PDF报告
-- [ ] 更多图表类型
-- [ ] 历史数据对比分析
-- [ ] 移动端PWA支持
-
-## License
-
-MIT
+仓库内旧文档（例如 `QUICKSTART.md`）可能仍描述 `localStorage` 持久化，以当前代码实现为准。

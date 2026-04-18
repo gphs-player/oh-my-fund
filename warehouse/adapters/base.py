@@ -39,6 +39,18 @@ class BaseDataSource:
         获取基金列表
 
         Returns:
-            [{"fund_code": "xxx", "fund_name": "xxx"}, ...]
+            [{"fund_code": "xxx", "fund_name": "xxx", "fund_type": "xxx"}, ...]
         """
         raise NotImplementedError("子类必须实现 get_fund_list 方法")
+
+    def get_fund_overview(self, fund_code: str) -> dict[str, str]:
+        """
+        获取单只基金基本信息
+
+        Args:
+            fund_code: 基金代码
+
+        Returns:
+            {"基金全称": "...", "基金简称": "...", ...}
+        """
+        raise NotImplementedError("子类必须实现 get_fund_overview 方法")

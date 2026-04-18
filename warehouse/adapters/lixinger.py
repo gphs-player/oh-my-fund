@@ -28,3 +28,10 @@ class LixingerDataSource(BaseDataSource):
         # TODO: 实现理杏仁 API 调用
         # 目前返回模拟数据，待接入真实 API
         raise NotImplementedError("理杏仁 API 待实现，请先配置 token 并参考理杏仁文档")
+
+    def get_fund_overview(self, fund_code: str) -> dict[str, str]:
+        """
+        获取单只基金基本信息
+        
+        """
+        raise NotImplementedError("理杏仁基金基本信息接口待实现，请参考理杏仁文档")

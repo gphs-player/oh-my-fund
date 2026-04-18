@@ -10,6 +10,7 @@ class FundCache:
 
     CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
     CACHE_PREFIX = "funds_list_cache_"
+    CACHE_FIELDS = ["fund_code", "fund_name", "fund_type"]
 
     _memory_cache: list[dict] = None
 
@@ -114,11 +115,19 @@ class FundCache:
         """读取 CSV 文件"""
         with open(filepath, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
-            return list(reader)
+            data = []
+            for row in reader:
+                data.append({
+                    "fund_code": row.get("fund_code", ""),
+                    "fund_name": row.get("fund_name", ""),
+                    # 兼容旧缓存文件仅包含 code/name 两列的情况
+                    "fund_type": row.get("fund_type", "") or "",
+                })
+            return data
 
     def _write_csv(self, filepath: str, data: list[dict]):
         """写入 CSV 文件"""
         with open(filepath, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=["fund_code", "fund_name"])
+            writer = csv.DictWriter(f, fieldnames=self.CACHE_FIELDS)
             writer.writeheader()
             writer.writerows(data)

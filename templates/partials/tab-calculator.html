@@ -1,0 +1,20 @@
+<div id="calculator-tab" class="tab-content hidden">
+    <div class="card bg-base-300/50 backdrop-blur-sm shadow-xl">
+        <div class="card-body">
+
+            <div role="tablist" class="tabs tabs-bordered mb-4">
+                <a role="tab" class="tab tab-active gap-2 min-h-12 px-4" data-subtab-group="calculator" data-subtab-target="calculator-annualized-content">
+                    <img src="{{ url_for('static', filename='images/icon1.svg') }}" alt="年化图标" class="w-8 h-8">
+                    <span>年化计算器</span>
+                </a>
+                <a role="tab" class="tab gap-2 min-h-12 px-4" data-subtab-group="calculator" data-subtab-target="calculator-compound-content">
+                    <img src="{{ url_for('static', filename='images/icon2.svg') }}" alt="复利图标" class="w-8 h-8">
+                    <span>复利计算器</span>
+                </a>
+            </div>
+
+            {% include 'partials/tab-annualized.html' %}
+            {% include 'partials/tab-compound.html' %}
+        </div>
+    </div>
+</div>

@@ -32,10 +32,9 @@
 
                 <!-- 右侧：Tab导航 -->
                 <div role="tablist" class="tabs tabs-bordered bg-transparent">
-                    <a role="tab" class="tab tab-active" data-tab="investment">投资计划</a>
+                    <a role="tab" class="tab tab-active" data-tab="investment">我的持仓</a>
                     <a role="tab" class="tab" data-tab="fund-select">多维选基</a>
-                    <a role="tab" class="tab" data-tab="annualized">年化计算器</a>
-                    <a role="tab" class="tab" data-tab="compound">复利计算器</a>
+                    <a role="tab" class="tab" data-tab="calculator">计算器</a>
                     <a role="tab" class="tab" data-tab="settings">设置</a>
                 </div>
             </div>
@@ -43,8 +42,7 @@
             <!-- Tab内容 -->
             {% include 'partials/tab-investment.html' %}
             {% include 'partials/tab-fund-select.html' %}
-            {% include 'partials/tab-annualized.html' %}
-            {% include 'partials/tab-compound.html' %}
+            {% include 'partials/tab-calculator.html' %}
             {% include 'partials/tab-settings.html' %}
         </div>
     </div>
@@ -52,44 +50,57 @@
     <!-- JavaScript -->
     <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
     <script src="{{ url_for('static', filename='js/investment.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/fund-select.js') }}"></script>
     <script src="{{ url_for('static', filename='js/annualized.js') }}"></script>
     <script src="{{ url_for('static', filename='js/compound.js') }}"></script>
     <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
     <script>
+        function switchMainTab(tabName) {
+            const targetTabButton = document.querySelector(`[data-tab="${tabName}"]`);
+            const targetTab = document.getElementById(`${tabName}-tab`);
+            if (!targetTabButton || !targetTab) return;
+
+            document.querySelectorAll('[data-tab]').forEach(t => t.classList.remove('tab-active'));
+            document.querySelectorAll('.tab-content').forEach(c => {
+                c.classList.add('hidden');
+                c.style.display = 'none';
+            });
+
+            targetTabButton.classList.add('tab-active');
+            targetTab.classList.remove('hidden');
+            targetTab.style.display = 'block';
+        }
+
+        window.switchMainTab = switchMainTab;
+
         // Tab切换逻辑 - 只选择有data-tab属性的主Tab
         document.querySelectorAll('[data-tab]').forEach(tab => {
             tab.addEventListener('click', function() {
-                // 移除所有active状态
-                document.querySelectorAll('[data-tab]').forEach(t => t.classList.remove('tab-active'));
-                document.querySelectorAll('.tab-content').forEach(c => {
-                    c.classList.add('hidden');
-                    c.style.display = 'none';
-                });
-
-                // 添加当前active状态
-                this.classList.add('tab-active');
-                const tabName = this.dataset.tab;
-                const targetTab = document.getElementById(`${tabName}-tab`);
-                targetTab.classList.remove('hidden');
-                targetTab.style.display = 'block';
+                switchMainTab(this.dataset.tab);
             });
         });
 
-        // 年化计算器子Tab切换
-        document.querySelectorAll('[data-subtab]').forEach(tab => {
-            tab.addEventListener('click', function(e) {
-                e.stopPropagation(); // 阻止事件冒泡
-                document.querySelectorAll('[data-subtab]').forEach(t => t.classList.remove('tab-active'));
-                document.querySelectorAll('.subtab-content').forEach(c => {
-                    c.classList.add('hidden');
-                    c.style.display = 'none';
-                });
+        function switchSubtab(groupName, targetId) {
+            const targetContent = document.getElementById(targetId);
+            if (!targetContent) return;
 
-                this.classList.add('tab-active');
-                const subtabName = this.dataset.subtab;
-                const targetSubtab = document.getElementById(`${subtabName}-content`);
-                targetSubtab.classList.remove('hidden');
-                targetSubtab.style.display = 'block';
+            document.querySelectorAll(`[data-subtab-group="${groupName}"]`).forEach(tab => {
+                tab.classList.toggle('tab-active', tab.dataset.subtabTarget === targetId);
+            });
+
+            document.querySelectorAll(`[data-subtab-content-group="${groupName}"]`).forEach(content => {
+                const isTarget = content.id === targetId;
+                content.classList.toggle('hidden', !isTarget);
+                content.style.display = isTarget ? 'block' : 'none';
+            });
+        }
+
+        window.switchSubtab = switchSubtab;
+
+        document.querySelectorAll('[data-subtab-group]').forEach(tab => {
+            tab.addEventListener('click', function(e) {
+                e.stopPropagation();
+                switchSubtab(this.dataset.subtabGroup, this.dataset.subtabTarget);
             });
         });
     </script>
