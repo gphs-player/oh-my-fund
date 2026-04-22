@@ -34,3 +34,6 @@ class TushareDataSource(BaseDataSource):
     def get_fund_overview(self, fund_code: str) -> dict[str, str]:
         """获取单只基金基本信息。"""
         raise NotImplementedError("Tushare 基金基本信息接口待实现，请参考 Tushare 文档")
+
+    def get_fund_history(self, fund_code: str, start_date: str | None = None, end_date: str | None = None) -> list[dict]:
+        raise NotImplementedError("Tushare 基金历史净值接口待实现，请参考 Tushare 文档")

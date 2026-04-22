@@ -157,6 +157,87 @@ body {
     color: #818cf8;
 }
 
+/* 多维选基：自选按钮专属金色收藏 palette */
+.favorite-btn {
+    min-width: 2rem;
+    border: 2px solid rgba(129, 140, 248, 0.5) !important;
+    color: #818cf8 !important;
+    background: rgba(129, 140, 248, 0.05) !important;
+    box-shadow: 0 4px 12px rgba(129, 140, 248, 0.12);
+    backdrop-filter: blur(8px);
+}
+
+.favorite-btn:hover {
+    border-color: #818cf8 !important;
+    color: #818cf8 !important;
+    background: rgba(129, 140, 248, 0.15) !important;
+    box-shadow: 0 8px 20px rgba(129, 140, 248, 0.22) !important;
+}
+
+.favorite-btn.is-active {
+    border-color: #818cf8 !important;
+    color: #818cf8 !important;
+    background: rgba(129, 140, 248, 0.18) !important;
+    box-shadow: 0 6px 18px rgba(129, 140, 248, 0.24), 0 0 14px rgba(129, 140, 248, 0.12) !important;
+}
+
+.favorite-btn.is-active:hover {
+    border-color: #818cf8 !important;
+    color: #818cf8 !important;
+    background: rgba(129, 140, 248, 0.22) !important;
+    box-shadow: 0 10px 24px rgba(129, 140, 248, 0.28), 0 0 18px rgba(129, 140, 248, 0.15) !important;
+}
+
+.favorite-btn:active {
+    transform: translateY(1px) !important;
+    box-shadow: 0 4px 12px rgba(129, 140, 248, 0.16) !important;
+}
+
+.favorite-btn.is-active:active {
+    box-shadow: 0 4px 14px rgba(129, 140, 248, 0.18), 0 0 10px rgba(129, 140, 248, 0.1) !important;
+}
+
+.favorite-btn-icon {
+    color: #d8c7a1;
+}
+
+.favorite-btn:hover .favorite-btn-icon {
+    color: #f3d48a;
+}
+
+.favorite-btn-icon.is-active {
+    color: #f6d365;
+}
+
+.favorite-btn.is-active:hover .favorite-btn-icon.is-active {
+    color: #ffe08a;
+}
+
+/* 多维选基操作区：非蓝色内容色 */
+.fund-action-group {
+    color: #e8c98f !important;
+}
+
+.fund-action-group:hover {
+    color: #f3d48a !important;
+}
+
+.fund-action-add {
+    color: #f2e3bf !important;
+}
+
+.fund-action-add:hover {
+    color: #fff0c9 !important;
+}
+
+.fund-action-detail {
+    color: #f5eddc !important;
+}
+
+.fund-action-detail:hover {
+    color: #fff7e8 !important;
+}
+
 /* 表格行悬停 - 更明显的高亮 */
 .table tbody tr:hover {
     background-color: rgba(129, 140, 248, 0.2);
@@ -550,4 +631,108 @@ body {
 
 #compound-tab #compound-result {
     margin-top: 1rem;
+}
+
+
+/* 策略详情页紧凑满宽布局 */
+.strategy-detail-shell .card-body {
+    min-height: auto;
+}
+
+.strategy-detail-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.strategy-detail-card .card-body {
+    min-height: auto;
+    padding: 1rem;
+}
+
+.strategy-detail-toolbar {
+    display: grid;
+    grid-template-columns: minmax(260px, 2.2fr) repeat(2, minmax(160px, 1fr)) minmax(140px, 0.8fr);
+    gap: 0.75rem;
+    align-items: end;
+}
+
+.strategy-detail-search-field {
+    min-width: 0;
+}
+
+.strategy-detail-toolbar-action {
+    display: flex;
+    align-items: end;
+}
+
+.strategy-detail-subrow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.strategy-detail-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.strategy-detail-stack-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.strategy-detail-stack-toolbar .select {
+    min-width: 220px;
+}
+
+.strategy-stack-item .label {
+    padding: 0;
+}
+
+.strategy-param-field .label {
+    padding-top: 0;
+    padding-bottom: 0.125rem;
+}
+
+.strategy-detail-signals-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.strategy-signal-card {
+    min-height: auto;
+}
+
+@media (max-width: 1279px) {
+    .strategy-detail-toolbar {
+        grid-template-columns: minmax(240px, 1.8fr) repeat(2, minmax(150px, 1fr));
+    }
+
+    .strategy-detail-toolbar-action {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 767px) {
+    .strategy-detail-toolbar {
+        grid-template-columns: 1fr;
+    }
+
+    .strategy-detail-signals-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .strategy-detail-status {
+        width: 100%;
+    }
 }

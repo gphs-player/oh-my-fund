@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>策略详情 - 一个亿小目标</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/favicon.svg') }}">
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.6.0/dist/full.min.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="min-h-screen bg-cover bg-center bg-fixed" style="background-image: url('{{ url_for('static', filename='images/background.jpg') }}');">
+    <div class="min-h-screen backdrop-blur-md bg-black/30">
+        <div class="container mx-auto px-4 pt-8 pb-6" style="max-width: 80%;">
+            <div class="flex flex-wrap justify-between items-center gap-4 mb-8">
+                <div class="flex items-center gap-3">
+                    <img src="{{ url_for('static', filename='images/logo.svg') }}" alt="Logo" class="w-10 h-10">
+                    <div>
+                        <h1 class="text-3xl font-bold shimmer-text">策略详情</h1>
+                        <p class="text-sm text-slate-300 mt-1">配置基金、期间、策略参数并分析表现</p>
+                    </div>
+                </div>
+                <a href="/#strategy" class="btn btn-outline btn-sm">返回首页</a>
+            </div>
+
+            <div class="card bg-base-300/50 backdrop-blur-sm shadow-xl strategy-detail-shell">
+                <div class="card-body p-4 lg:p-5">
+                    <div class="strategy-detail-header mb-4">
+                        <div class="flex-1 min-w-[260px]">
+                            <label class="label py-1"><span class="label-text">策略名称</span></label>
+                            <input id="strategy-detail-name" type="text" class="input input-bordered w-full" placeholder="请输入策略名称后保存">
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2 self-end">
+                            <button type="button" id="strategy-detail-save-btn" class="btn btn-sm btn-primary">保存策略</button>
+                            <button type="button" id="strategy-detail-delete-btn" class="btn btn-sm btn-outline hidden">删除策略</button>
+                            <button type="button" id="strategy-detail-run-btn" class="btn btn-sm btn-accent">运行分析</button>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div class="card neon-border strategy-detail-card">
+                            <div class="card-body p-4">
+                                <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                                    <div>
+                                        <h3 class="font-bold">基金与区间</h3>
+                                        <p class="text-xs text-slate-300 mt-1">选择基金、日期范围并加载净值</p>
+                                    </div>
+                                </div>
+                                <div class="strategy-detail-toolbar mb-3">
+                                    <div class="strategy-detail-search-field relative">
+                                        <label class="label py-1"><span class="label-text">基金搜索</span></label>
+                                        <input id="strategy-detail-fund-keyword" type="text" class="input input-bordered h-10 min-h-10 w-full" placeholder="输入基金代码或名称">
+                                        <div id="strategy-detail-fund-suggestions" class="hidden absolute z-20 mt-1 w-full rounded-xl border border-white/10 bg-slate-900/95 shadow-xl"></div>
+                                    </div>
+                                    <div>
+                                        <label class="label py-1"><span class="label-text">开始日期</span></label>
+                                        <input id="strategy-detail-start-date" type="date" class="input input-bordered h-10 min-h-10 w-full">
+                                    </div>
+                                    <div>
+                                        <label class="label py-1"><span class="label-text">结束日期</span></label>
+                                        <input id="strategy-detail-end-date" type="date" class="input input-bordered h-10 min-h-10 w-full">
+                                    </div>
+                                    <div class="strategy-detail-toolbar-action">
+                                        <button type="button" id="strategy-detail-load-history-btn" class="btn btn-sm btn-outline w-full">加载净值</button>
+                                    </div>
+                                </div>
+                                <div class="strategy-detail-subrow">
+                                    <div class="flex flex-wrap gap-2" id="strategy-detail-period-presets">
+                                        <button type="button" class="btn btn-xs btn-outline" data-preset="6m">半年</button>
+                                        <button type="button" class="btn btn-xs btn-outline" data-preset="1y">1年</button>
+                                        <button type="button" class="btn btn-xs btn-outline" data-preset="2y">2年</button>
+                                        <button type="button" class="btn btn-xs btn-outline" data-preset="3y">3年</button>
+                                        <button type="button" class="btn btn-xs btn-outline" data-preset="all">全部</button>
+                                    </div>
+                                    <div class="strategy-detail-status text-sm text-slate-300">
+                                        <span class="badge badge-outline">当前基金</span>
+                                        <span id="strategy-detail-selected-fund">未选择</span>
+                                        <span class="badge badge-outline">期间</span>
+                                        <span id="strategy-detail-selected-range">半年</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card neon-border strategy-detail-card">
+                            <div class="card-body p-4">
+                                <div class="flex flex-wrap items-start justify-between gap-3 mb-3">
+                                    <div>
+                                        <h3 class="font-bold">内置策略</h3>
+                                        <p class="text-xs text-slate-300 mt-1">支持单策略与多策略组合，参数区域已做紧凑布局</p>
+                                    </div>
+                                    <span id="strategy-detail-stack-count" class="badge badge-outline">0 个</span>
+                                </div>
+                                <div class="strategy-detail-stack-toolbar mb-3">
+                                    <select id="strategy-detail-add-type" class="select select-bordered select-sm flex-1"></select>
+                                    <button type="button" id="strategy-detail-add-btn" class="btn btn-sm btn-outline">添加</button>
+                                </div>
+                                <div id="strategy-detail-stack" class="space-y-3">
+                                    <div class="text-sm text-slate-300">暂无策略，请先添加。</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card neon-border strategy-detail-card">
+                            <div class="card-body p-4">
+                                <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                                    <div>
+                                        <h3 class="font-bold">分析图表</h3>
+                                        <p class="text-xs text-slate-300 mt-1">满宽展示基金净值、指标叠加与买卖点</p>
+                                    </div>
+                                    <span class="badge badge-outline">走势图</span>
+                                </div>
+                                <div class="rounded-2xl border border-white/10 bg-black/20 p-3 relative h-[420px] lg:h-[520px]">
+                                    <canvas id="strategy-detail-chart" class="w-full h-full"></canvas>
+                                    <div id="strategy-detail-chart-loading" class="hidden absolute inset-0 rounded-2xl bg-slate-950/75 backdrop-blur-[2px] flex items-center justify-center">
+                                        <div class="text-center">
+                                            <span class="loading loading-spinner loading-lg text-cyan-300"></span>
+                                            <div id="strategy-detail-chart-loading-text" class="text-sm text-slate-200 mt-3">正在加载...</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card neon-border strategy-detail-card">
+                            <div class="card-body p-4">
+                                <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                                    <div>
+                                        <h3 class="font-bold">分析结果</h3>
+                                        <p id="strategy-detail-summary" class="text-xs text-slate-300 mt-1">请选择基金并运行分析</p>
+                                    </div>
+                                    <span id="strategy-detail-signal-count" class="badge badge-outline">0 个</span>
+                                </div>
+                                <div id="strategy-detail-signals-loading" class="hidden rounded-2xl border border-white/10 bg-black/15 p-6 text-center">
+                                    <span class="loading loading-spinner loading-md text-cyan-300"></span>
+                                    <div class="text-sm text-slate-300 mt-3">正在生成买卖点...</div>
+                                </div>
+                                <div id="strategy-detail-signals" class="strategy-detail-signals-grid max-h-[560px] overflow-y-auto pr-1">
+                                    <div class="text-sm text-slate-300">暂无分析结果。</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.STRATEGY_DETAIL_BOOTSTRAP = {{ bootstrap | tojson }};
+    </script>
+    <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/strategy-detail.js') }}"></script>
+</body>
+</html>

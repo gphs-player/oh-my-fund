@@ -1,0 +1,25 @@
+<div id="strategy-tab" class="tab-content hidden">
+    <div class="card bg-base-300/50 backdrop-blur-sm shadow-xl">
+        <div class="card-body">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <div>
+                    <h2 class="card-title gradient-text mb-1">策略</h2>
+                    <p class="text-sm text-slate-300">默认展示策略列表，点击进入详情页后再做基金分析与策略调参。</p>
+                </div>
+                <button type="button" id="strategy-new-btn" class="btn btn-sm btn-primary">新建策略</button>
+            </div>
+
+            <div class="card neon-border">
+                <div class="card-body p-4">
+                    <div class="flex items-center justify-between gap-2 mb-3">
+                        <h3 class="font-bold">策略列表</h3>
+                        <span id="strategy-list-summary" class="text-xs text-slate-300">0 条</span>
+                    </div>
+                    <div id="strategy-list" class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        <div class="text-sm text-slate-300">加载中...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

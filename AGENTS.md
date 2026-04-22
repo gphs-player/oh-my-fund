@@ -1,249 +1,289 @@
+## 关于我
+
+我的名字是牛宝，是一名Android开发工程师。
+
+## 注意
+
+永远用中文回答问题。
+
+--- project-doc ---
+
 # AI Agent 开发指南
 
 ## 项目概述
 
-"一个亿小目标" - 个人基金理财计算器，Flask 后端 + 纯前端业务逻辑。
+“一个亿小目标” - 个人基金理财工具，采用 Flask 后端渲染 + 原生前端业务逻辑，服务端 CSV 持久化。
 
 ## 工程现状（以代码为准）
 
 - 持久化已迁移为服务端 CSV（`data/` 下文件），不再依赖浏览器 `localStorage`
-- 新增基金数据仓库层（`warehouse/`）：数据源切换 + 基金列表缓存（内存 + CSV）
-- 新增「多维选基」模块：从 `/api/funds` 加载基金列表，支持搜索/筛选/分页，可一键带入“添加持仓”弹框，并支持基金详情弹层（走 `/api/funds/<fund_code>/overview`）
-- 设置页支持数据源管理与缓存刷新（基金列表缓存文件名：`funds_list_cache_YYYY_MM_DD.csv`）
-- 顶部导航中的「年化计算器」与「复利计算器」已合并为「计算器」主 Tab，内容区再区分两个入口
-- 数据源抽象层新增基金基本信息能力：所有数据源适配器必须实现 `get_fund_overview(fund_code)`
+- 已有基金数据仓库层（`warehouse/`）：数据源切换 + 基金列表缓存（内存 + CSV）
+- 默认数据源已支持：
+  - 基金列表
+  - 基金基本概况
+  - 基金历史净值
+  - 实时估值 / 涨跌幅
+- 多维选基模块已支持：
+  - “全部” / “自选”双视图
+  - 搜索 / 筛选 / 分页
+  - 基金详情弹层
+  - 自选分组管理
+- 顶部导航中的“年化计算器”和“复利计算器”已合并为“计算器”主 Tab
+- 策略模块已重构为：
+  - 首页 `策略` Tab：展示策略列表与新建入口
+  - 独立详情页：`/strategies/new`、`/strategies/<strategy_id>`
+  - 详情页支持基金选择、期间快捷选择、日期选择器、加载净值、内置策略组合、参数调整、运行分析、保存、删除
+- 策略记录当前支持“单策略”与“多策略组合”两种使用方式，底层都保存为 `stack`
+- 新增 `strategies/` 目录，每个内置策略为一个独立 Python 文件
 
 ## 构建和运行
 
 ```bash
-pip install -r requirements.txt  # 安装依赖 (仅 Flask==3.0.0)
-python3 app.py                   # 启动开发服务器 (端口 5001)
-open http://localhost:5001       # 访问
+pip install -r requirements.txt
+python3 app.py
+open http://localhost:5001
 ```
 
-**注意**: 本项目无自动化测试，所有验证需手动在浏览器中进行。
+**注意**：本项目当前无自动化测试，所有验证以手动浏览器验证为主。
 
 ## 项目结构
 
-```
+```text
 fund-calculator/
-├── app.py                 # Flask 入口 + API 接口 (端口 5001)
+├── app.py
 ├── data/
-│   ├── markets.csv        # 市场列表 (服务端存储)
-│   ├── investments.csv    # 持仓数据 (服务端存储，fund_code 为主键)
-│   ├── datasources.csv    # 数据源配置
-│   └── settings.csv       # 全局设置
-│   └── funds_list_cache_*.csv  # 基金列表缓存（自动生成）
-├── warehouse/             # 数据仓库层
-│   ├── __init__.py
-│   ├── cache.py           # FundCache 缓存管理
-│   ├── repository.py      # FundRepository 统一入口
-│   └── adapters/          # 数据源适配器
-│       ├── base.py        # BaseDataSource 基类
-│       ├── eastmoney_overview.py # 东方财富基金基本概况提取逻辑
-│       ├── factory.py     # 工厂方法 + 注册表
-│       ├── default.py     # 默认数据源（东方财富基金列表 + 基本概况）
-│       ├── lixinger.py    # 理杏仁适配器
-│       └── tushare.py     # Tushare 适配器
-├── tools/
-│   └── extract_fund_overview.py  # 东方财富基金基本概况提取脚本
+│   ├── markets.csv
+│   ├── investments.csv
+│   ├── favorites.csv
+│   ├── favorite_groups.csv
+│   ├── favorite_group_memberships.csv
+│   ├── datasources.csv
+│   ├── settings.csv
+│   ├── strategies.csv
+│   └── funds_list_cache_*.csv
+├── strategies/
+│   ├── base.py
+│   ├── registry.py
+│   ├── trend_sma.py
+│   ├── rsi.py
+│   ├── bollinger.py
+│   └── dca.py
+├── warehouse/
+│   ├── cache.py
+│   ├── repository.py
+│   └── adapters/
+│       ├── base.py
+│       ├── default.py
+│       ├── eastmoney_overview.py
+│       ├── factory.py
+│       ├── lixinger.py
+│       └── tushare.py
 ├── templates/
-│   ├── index.html         # 主页面模板 (Jinja2)
-│   └── partials/          # 可复用模板片段
+│   ├── index.html
+│   ├── strategy_detail.html
+│   └── partials/
 ├── static/
-│   ├── css/style.css      # 自定义样式 (毛玻璃、霓虹效果)
-│   ├── images/            # 图标、背景、Logo
+│   ├── css/style.css
 │   └── js/
-│       ├── utils.js       # 工具函数 (CSV、验证、Toast)
-│       ├── investment.js  # 我的持仓 + 市场管理
-│       ├── fund-select.js # 多维选基
-│       ├── annualized.js  # 年化计算器
-│       ├── compound.js    # 复利计算器
-│       └── settings.js    # 设置页管理
-└── docs/plans/            # 设计文档
+│       ├── utils.js
+│       ├── investment.js
+│       ├── fund-select.js
+│       ├── strategy.js
+│       ├── strategy-detail.js
+│       ├── annualized.js
+│       ├── compound.js
+│       └── settings.js
+└── tools/
 ```
 
 ## 技术栈
 
 | 组件 | 技术 |
 |------|------|
-| 后端 | Flask 3.0.0 (页面渲染 + 市场列表 API) |
-| 前端 | Tailwind CSS (CDN) + DaisyUI 4.6.0 |
+| 后端 | Flask 3.0.0 |
+| 前端 | Tailwind CSS（CDN）+ DaisyUI 4.6.0 |
 | 图表 | Chart.js 4.4.1 |
-| 存储 | 服务端 CSV (市场、持仓、数据源、设置) |
+| 存储 | 服务端 CSV |
 
-## API 接口
+## API / 页面路由
+
+### 页面路由
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/markets` | 获取市场列表 |
-| POST | `/api/markets` | 保存市场列表 (JSON 数组，全量覆盖) |
-| GET | `/api/investments` | 获取所有持仓 |
-| POST | `/api/investments` | 添加持仓 (fund_code 重复则报错) |
-| PUT | `/api/investments/<fund_code>` | 更新持仓 |
-| DELETE | `/api/investments/<fund_code>` | 删除持仓 |
-| GET | `/api/datasources/types` | 获取支持的数据源类型 |
-| GET | `/api/datasources` | 获取数据源列表 |
-| POST | `/api/datasources` | 添加数据源 |
-| GET | `/api/datasources/<id>` | 获取单个数据源详情（含配置） |
-| PUT | `/api/datasources/<id>` | 更新数据源 |
-| DELETE | `/api/datasources/<id>` | 删除数据源 |
-| POST | `/api/datasources/<id>/activate` | 激活数据源（自动停用其他） |
-| POST | `/api/datasources/<id>/deactivate` | 停用数据源 |
-| POST | `/api/datasources/<id>/test` | 测试数据源连接 |
-| GET | `/api/settings` | 获取全局设置 |
-| PUT | `/api/settings` | 更新全局设置 |
-| GET | `/api/cache/info` | 获取缓存状态 |
-| POST | `/api/cache/refresh` | 手动刷新缓存 |
-| GET | `/api/funds` | 获取基金列表（走缓存逻辑） |
-| GET | `/api/funds/<fund_code>/overview` | 获取单只基金基本信息（原始键值表） |
+| GET | `/` | 首页 |
+| GET | `/strategies/new` | 新建策略详情页 |
+| GET | `/strategies/<strategy_id>` | 策略详情页 |
 
----
+### 策略接口
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/strategy-types` | 获取动态注册的内置策略类型 |
+| GET | `/api/strategies` | 获取策略列表 |
+| POST | `/api/strategies` | 新建策略 |
+| GET | `/api/strategies/<strategy_id>` | 获取单条策略详情 |
+| PUT | `/api/strategies/<strategy_id>` | 更新策略 |
+| DELETE | `/api/strategies/<strategy_id>` | 删除策略 |
+| POST | `/api/strategy-analysis/run` | 执行策略分析 |
+
+### 基金接口（策略相关）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/funds` | 获取基金列表 |
+| GET | `/api/funds/<fund_code>/overview` | 获取基金基本概况 |
+| GET | `/api/funds/<fund_code>/history` | 获取历史净值 |
+| GET | `/api/funds/<fund_code>/gz` | 获取单只基金实时估值 |
+| GET | `/api/funds/gz` | 批量 / 分页获取实时估值 |
 
 ## 代码规范
 
-### JavaScript 模块模式 (强制)
+### JavaScript 模块模式（强制）
 
-所有 JS 模块必须使用对象字面量模式：
+所有 JS 模块继续使用对象字面量模式：
 
 ```javascript
 const ModuleName = {
-    data: [],
-    init: function() { this.render(); },
-    methodName: function(params) { /* 实现 */ }
+    init: function() {},
+    methodName: function() {}
 };
-document.addEventListener('DOMContentLoaded', function() { ModuleName.init(); });
+
+document.addEventListener('DOMContentLoaded', function() {
+    ModuleName.init();
+});
 ```
 
 ### 命名规范
 
 | 类型 | 规范 | 示例 |
 |------|------|------|
-| 模块对象 | PascalCase | `InvestmentManager`, `MarketManager` |
-| 方法/变量 | camelCase | `renderChart`, `totalPosition` |
-| HTML ID | kebab-case | `investment-table-body`, `market-modal` |
-| CSS 类 | Tailwind/DaisyUI | `btn-primary`, `card-body` |
-| 数据字段 | snake_case | `fund_name`, `trade_type`, `holding_plan` |
-| Python 函数 | snake_case | `read_markets`, `ensure_markets_file` |
+| 模块对象 | PascalCase | `InvestmentManager`, `StrategyListPage`, `StrategyDetailPage` |
+| 方法/变量 | camelCase | `renderChart`, `loadHistoryOnly` |
+| HTML ID | kebab-case | `strategy-detail-name`, `strategy-list-summary` |
+| 数据字段 | snake_case | `fund_name`, `fund_code`, `holding_plan` |
+| Python 函数 | snake_case | `read_strategies`, `resolve_date_range` |
 | Python 常量 | UPPER_SNAKE_CASE | `MARKETS_FILE`, `DEFAULT_MARKETS` |
 
-### 持仓记录字段
+## 策略模块开发约定
 
-```javascript
+### 策略记录结构
+
+策略记录底层统一为：
+
+```json
 {
-    fund_code: String,      // 基金代码 (5-8位数字，主键)
-    fund_name: String,      // 基金名称 (必填)
-    sector: String,         // 板块
-    position: Number,       // 仓位金额 (>=0)
-    trade_type: String,     // "场内" | "场外"
-    market: String,         // 从 /api/markets 获取
-    risk_level: String,     // "高" | "中高" | "中" | "低"
-    holding_plan: String    // "长期" | "中期" | "短期"
+  "strategy_id": "...",
+  "name": "...",
+  "fund_code": "...",
+  "fund_name": "...",
+  "date_range": {
+    "preset": "6m",
+    "start_date": "2026-01-01",
+    "end_date": "2026-06-30",
+    "full_history": false
+  },
+  "stack": [
+    {
+      "strategy_type": "trend_sma",
+      "enabled": true,
+      "display_enabled": true,
+      "params": {}
+    }
+  ]
 }
 ```
 
-### 工具函数 (utils.js)
+### 内置策略模块规范
 
-```javascript
-// 验证
-Validator.required(value)    // 非空验证
-Validator.fundCode(code)     // 5-8位数字
-Validator.position(pos)      // 数字且 >= 0
-Validator.number(value)      // 有效数字
+每个内置策略放在 `strategies/` 下的独立文件中，并通过 `strategies/registry.py` 注册。
 
-// Toast 提示
-showToast('消息', 'success')  // success | error | warning | info
+策略模块至少要提供：
 
-// CSV 操作
-parseCSV(csvText)            // 解析 CSV 文本
-generateCSV(data, headers)   // 生成 CSV 字符串
-downloadCSV(data, headers, filename)  // 下载 CSV 文件
-```
+- 类型标识
+- 名称
+- 描述
+- 参数 schema
+- 默认参数
+- `run(history, params)`
 
-### CSS 样式规范
+返回结果需兼容：
 
-- 组件: DaisyUI 类 (`btn`, `card`, `input`, `table`)
-- 自定义样式: `static/css/style.css`
-- 主题色: 蓝 `#60a5fa`, 紫 `#a78bfa`, 青 `#22d3ee`, 黄 `#fbbf24`
-- 文字: 主要 `#e2e8f0`，次要 `#cbd5e1`
+- `overlays`
+- `signals`
+- `meta`
 
-### HTML 规范
+### 历史净值与分析
 
-- Tab 切换: 主 Tab 用 `data-tab`，分组子 Tab 用 `data-subtab-group` + `data-subtab-target`
-- 首个 Tab 需 `style="display: block;"`
-- 模态框: `<dialog>` + `.showModal()` / `.close()`
-- 验证: HTML5 原生 (`required`, `pattern`, `min`, `max`)
-
----
+- 历史净值统一通过 `FundRepository.get_fund_history()` 获取
+- 当前默认数据源走东方财富历史净值接口
+- “全部”区间通过 `full_history=true` 表达
+- 前端详情页负责：
+  - 快捷区间与日期选择器联动
+  - 加载净值
+  - 运行分析
+  - 渲染图表与信号列表
 
 ## 常见开发任务
 
-### 添加投资字段
+### 修改策略列表页
 
-1. `templates/index.html`: 修改 `<thead>` 和模态框表单
-2. `static/js/investment.js`: 修改 `render()` 和 `handleSubmit()`
-3. 更新 CSV 导入导出的 headers 数组
+1. `templates/partials/tab-strategy.html`
+2. `static/js/strategy.js`
 
-### 添加新 Tab 模块
+### 修改策略详情页
 
-1. `templates/index.html`: 添加 Tab 按钮 (`data-tab="xxx"`) 和内容区域 (`id="xxx-tab"`)
-2. 创建 `static/js/xxx.js`: 使用对象字面量模式
-3. `templates/index.html`: 底部 `<script src="/static/js/xxx.js"></script>`
+1. `templates/strategy_detail.html`
+2. `static/js/strategy-detail.js`
+3. 如需后端回填或保存字段，修改 `app.py`
 
-### 修改图表
+### 新增内置策略
 
-- 投资饼图: `InvestmentUI.renderChart()` in `investment.js`
-- 复利折线图: `CompoundCalculator.renderChart()` in `compound.js`
-- 颜色: 各模块的 `getColor(index, alpha)` 方法
+1. 在 `strategies/` 下新增一个策略文件
+2. 在 `strategies/registry.py` 注册
+3. 确认参数 schema、默认值、输出 overlays/signals 结构正确
+4. 手动验证详情页可添加并运行该策略
 
-### 基金详情弹层
+### 修改历史净值加载
 
-- 入口: `FundSelector.showDetail(fundCode)` in `fund-select.js`
-- 后端接口: `GET /api/funds/<fund_code>/overview`
-- 弹层节点: `#fund-detail-modal`
-- 当前布局: 顶部标题 + 详情键值表（单行两组字段），加载态为 spinner
-
----
+1. `warehouse/repository.py`
+2. `warehouse/adapters/base.py`
+3. `warehouse/adapters/default.py`
+4. 如涉及详情页交互，再同步修改 `static/js/strategy-detail.js`
 
 ## 错误处理模式
 
 ```javascript
-// 验证失败 - 提前返回
-if (!Validator.fundCode(code)) { showToast('错误', 'error'); return; }
+if (!Validator.fundCode(code)) {
+    showToast('错误', 'error');
+    return;
+}
 
-// try-catch + Toast
-try { const data = parseCSV(text); }
-catch (e) { showToast('失败: ' + e.message, 'error'); }
-
-// async API 调用
-try { const res = await fetch('/api/markets'); }
-catch (e) { showToast('加载失败', 'error'); }
+try {
+    const res = await fetch('/api/funds');
+} catch (e) {
+    showToast('加载失败', 'error');
+}
 ```
-
----
-
-## 已知问题
-
-| 问题 | 解决方案 |
-|------|----------|
-| Tab 内容不显示 | 检查 `</div>` 闭合是否正确 |
-| 子 Tab 影响父 Tab | 使用分组子 Tab：`data-subtab-group` + `data-subtab-target` |
-| 金额过长 | 使用 `formatMoney()` 转万/亿单位 |
-| 市场下拉为空 | 检查 `/api/markets` 接口和 `MarketManager.load()` |
-
----
 
 ## 手动测试清单
 
-修改后验证：
+修改后重点验证：
 
-- [ ] Tab 切换正常 (我的持仓/多维选基/计算器/设置)
-- [ ] 计算器二级入口切换正常 (年化计算器/复利计算器)
-- [ ] 投资记录增删改正常
-- [ ] CSV 导入导出数据完整
-- [ ] 市场管理 (添加/删除/保存) 正常
-- [ ] 图表正确渲染
-- [ ] 金额计算准确
-- [ ] Toast 提示正常
-- [ ] 模态框打开/关闭正常
-- [ ] 多维选基基金详情弹层加载、错误、关闭正常
+- [ ] 首页 Tab 切换正常
+- [ ] `/#strategy` 能正确切到策略 Tab
+- [ ] 策略列表正常展示
+- [ ] 新建策略可进入 `/strategies/new`
+- [ ] 点击列表项可进入 `/strategies/<id>`
+- [ ] 详情页基金搜索可用
+- [ ] 半年 / 1年 / 2年 / 3年 / 全部 与日期选择器联动正常
+- [ ] 加载净值正常
+- [ ] 运行分析正常
+- [ ] 单策略与多策略组合都能保存和回填
+- [ ] 已保存策略可删除
+- [ ] 多维选基、自选分组、设置、计算器未被破坏
+
+## 备注
+
+- 以代码为准
+- 若 README、QUICKSTART、旧计划文档之间有冲突，以当前代码和本文件说明为准

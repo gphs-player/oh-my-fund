@@ -1,6 +1,10 @@
 const FundSelector = {
     allFunds: [],
     filteredFunds: [],
+    favoriteFunds: [],
+    favoriteFundCodes: new Set(),
+    favoriteGroups: [],
+    favoriteMemberships: [],
     availableTypes: [],
     currentPage: 1,
     pageSize: 20,
@@ -8,12 +12,15 @@ const FundSelector = {
     isLoading: false,
     searchKeyword: '',
     selectedFundType: '',
+    selectedScope: 'all',
+    selectedFavoriteGroupId: 'default',
     debounceTimer: null,
     debounceDelay: 300,
     detailFundCode: '',
     detailLoading: false,
     detailData: null,
     detailError: '',
+    assigningFundCode: '',
 
     init: function() {
         this.bindEvents();
@@ -63,29 +70,53 @@ const FundSelector = {
         this.render();
 
         try {
-            const response = await fetch('/api/funds');
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-
-            const data = await response.json();
-            this.allFunds = Array.isArray(data) ? data : [];
-            this.filteredFunds = [...this.allFunds];
-            this.availableTypes = this.extractAvailableTypes();
-            this.renderTypeOptions();
-            this.currentPage = 1;
+            await this.reloadData();
             this.isLoaded = true;
+            this.applyFilters();
         } catch (error) {
             showToast('加载基金列表失败: ' + error.message, 'error');
             this.allFunds = [];
             this.filteredFunds = [];
+            this.favoriteFunds = [];
+            this.favoriteFundCodes = new Set();
+            this.favoriteGroups = [];
+            this.favoriteMemberships = [];
             this.availableTypes = [];
-            this.renderTypeOptions();
             this.isLoaded = true;
         } finally {
             this.isLoading = false;
             this.render();
         }
+    },
+
+    reloadData: async function() {
+        const [fundResponse, favoriteResponse, groupResponse, membershipResponse] = await Promise.all([
+            fetch('/api/funds'),
+            fetch('/api/favorites'),
+            fetch('/api/favorite-groups'),
+            fetch('/api/favorite-group-memberships')
+        ]);
+
+        if (!fundResponse.ok) throw new Error(`HTTP ${fundResponse.status}`);
+        if (!favoriteResponse.ok) throw new Error(`HTTP ${favoriteResponse.status}`);
+        if (!groupResponse.ok) throw new Error(`HTTP ${groupResponse.status}`);
+        if (!membershipResponse.ok) throw new Error(`HTTP ${membershipResponse.status}`);
+
+        const [fundData, favoriteData, groupData, membershipData] = await Promise.all([
+            fundResponse.json(),
+            favoriteResponse.json(),
+            groupResponse.json(),
+            membershipResponse.json()
+        ]);
+
+        this.allFunds = Array.isArray(fundData) ? fundData : [];
+        this.favoriteFunds = Array.isArray(favoriteData) ? favoriteData : [];
+        this.favoriteFundCodes = new Set(this.favoriteFunds.map(item => item.fund_code));
+        this.favoriteGroups = Array.isArray(groupData) ? groupData : [];
+        this.favoriteMemberships = Array.isArray(membershipData) ? membershipData : [];
+        this.availableTypes = this.extractAvailableTypes();
+        this.renderTypeOptions();
+        this.ensureSelectedFavoriteGroup();
     },
 
     extractAvailableTypes: function() {
@@ -110,6 +141,13 @@ const FundSelector = {
         typeSelect.value = this.selectedFundType;
     },
 
+    ensureSelectedFavoriteGroup: function() {
+        const groupIds = new Set(this.favoriteGroups.map(item => item.group_id));
+        if (!groupIds.has(this.selectedFavoriteGroupId)) {
+            this.selectedFavoriteGroupId = groupIds.has('default') ? 'default' : (this.favoriteGroups[0]?.group_id || '');
+        }
+    },
+
     scheduleFilter: function() {
         if (this.debounceTimer) {
             clearTimeout(this.debounceTimer);
@@ -121,22 +159,45 @@ const FundSelector = {
     },
 
     applyFilters: function() {
-        const keyword = this.searchKeyword.toLowerCase();
-        const selectedType = this.selectedFundType;
+        if (this.selectedScope === 'favorite') {
+            this.filteredFunds = this.getFundsBySelectedGroup();
+        } else {
+            const keyword = this.searchKeyword.toLowerCase();
+            const selectedType = this.selectedFundType;
 
-        this.filteredFunds = this.allFunds.filter(item => {
-            const fundCode = (item.fund_code || '').toLowerCase();
-            const fundName = (item.fund_name || '').toLowerCase();
-            const keywordMatched = keyword === '' ||
-                fundCode.includes(keyword) ||
-                fundName.includes(keyword);
-            const typeMatched = selectedType === '' || (item.fund_type || '') === selectedType;
-
-            return keywordMatched && typeMatched;
-        });
+            this.filteredFunds = this.allFunds.filter(item => {
+                const fundCode = (item.fund_code || '').toLowerCase();
+                const fundName = (item.fund_name || '').toLowerCase();
+                const keywordMatched = keyword === '' || fundCode.includes(keyword) || fundName.includes(keyword);
+                const typeMatched = selectedType === '' || (item.fund_type || '') === selectedType;
+                return keywordMatched && typeMatched;
+            });
+        }
 
         this.currentPage = 1;
         this.render();
+    },
+
+    getFundsBySelectedGroup: function() {
+        const groupId = this.selectedFavoriteGroupId;
+        const fundCodes = new Set(
+            this.favoriteMemberships
+                .filter(item => item.group_id === groupId)
+                .map(item => item.fund_code)
+        );
+
+        return this.allFunds.filter(item => fundCodes.has(item.fund_code));
+    },
+
+    switchScope: function(scope) {
+        if (scope !== 'all' && scope !== 'favorite') return;
+        this.selectedScope = scope;
+        this.applyFilters();
+    },
+
+    selectFavoriteGroup: function(groupId) {
+        this.selectedFavoriteGroupId = groupId;
+        this.applyFilters();
     },
 
     clearKeyword: function() {
@@ -184,16 +245,58 @@ const FundSelector = {
     },
 
     render: function() {
+        this.renderScopeButtons();
+        this.renderDiscoveryFilters();
+        this.renderFavoriteToolbar();
         this.renderKeywordClearButton();
         this.renderContent();
         this.renderPagination();
+    },
+
+    renderScopeButtons: function() {
+        const allButton = document.getElementById('fund-scope-all');
+        const favoriteButton = document.getElementById('fund-scope-favorite');
+        if (!allButton || !favoriteButton) return;
+
+        const isAll = this.selectedScope === 'all';
+        allButton.className = `btn btn-sm ${isAll ? 'btn-primary' : 'btn-outline'}`;
+        favoriteButton.className = `btn btn-sm ${!isAll ? 'btn-primary' : 'btn-outline'}`;
+    },
+
+    renderDiscoveryFilters: function() {
+        const discoveryFilters = document.getElementById('fund-discovery-filters');
+        if (!discoveryFilters) return;
+        discoveryFilters.classList.toggle('hidden', this.selectedScope !== 'all');
+    },
+
+    renderFavoriteToolbar: function() {
+        const toolbar = document.getElementById('favorite-group-toolbar');
+        const tabs = document.getElementById('favorite-group-tabs');
+        if (!toolbar || !tabs) return;
+
+        const isFavorite = this.selectedScope === 'favorite';
+        toolbar.classList.toggle('hidden', !isFavorite);
+
+        if (!isFavorite) {
+            tabs.innerHTML = '';
+            return;
+        }
+
+        this.ensureSelectedFavoriteGroup();
+        tabs.innerHTML = this.favoriteGroups.map(group => `
+            <button type="button"
+                class="tab ${group.group_id === this.selectedFavoriteGroupId ? 'tab-active' : ''}"
+                onclick="FundSelector.selectFavoriteGroup('${group.group_id}')">
+                ${group.group_name}
+            </button>
+        `).join('');
     },
 
     renderKeywordClearButton: function() {
         const clearButton = document.getElementById('fund-search-clear');
         if (!clearButton) return;
 
-        if (this.searchKeyword) {
+        if (this.searchKeyword && this.selectedScope === 'all') {
             clearButton.classList.remove('hidden');
         } else {
             clearButton.classList.add('hidden');
@@ -214,7 +317,13 @@ const FundSelector = {
             return;
         }
 
-        summaryEl.textContent = `总计 ${this.filteredFunds.length} 条`;
+        if (this.selectedScope === 'favorite') {
+            const group = this.favoriteGroups.find(item => item.group_id === this.selectedFavoriteGroupId);
+            summaryEl.textContent = `${group ? group.group_name : '当前分组'} 共 ${this.filteredFunds.length} 条`;
+            return;
+        }
+
+        summaryEl.textContent = `全部共 ${this.filteredFunds.length} 条`;
     },
 
     renderContent: function() {
@@ -225,9 +334,7 @@ const FundSelector = {
         const emptyDesc = document.getElementById('fund-empty-desc');
         const tbody = document.getElementById('fund-select-table-body');
 
-        if (!loadingEl || !emptyEl || !tableWrapper || !emptyTitle || !emptyDesc || !tbody) {
-            return;
-        }
+        if (!loadingEl || !emptyEl || !tableWrapper || !emptyTitle || !emptyDesc || !tbody) return;
 
         loadingEl.classList.add('hidden');
         emptyEl.classList.add('hidden');
@@ -249,8 +356,13 @@ const FundSelector = {
         }
 
         if (this.filteredFunds.length === 0) {
-            emptyTitle.textContent = '没有找到匹配基金';
-            emptyDesc.textContent = '请调整关键字或基金类型后重试。';
+            if (this.selectedScope === 'favorite') {
+                emptyTitle.textContent = '当前分组暂无基金';
+                emptyDesc.textContent = '你可以通过“分组管理”新增分组，或在基金行内把自选基金加入当前分组。';
+            } else {
+                emptyTitle.textContent = '没有找到匹配基金';
+                emptyDesc.textContent = '请调整关键字或基金类型后重试。';
+            }
             emptyEl.classList.remove('hidden');
             tbody.innerHTML = '';
             this.renderSummary();
@@ -266,18 +378,26 @@ const FundSelector = {
                 <td>${item.fund_name || '-'}</td>
                 <td>${item.fund_type || '-'}</td>
                 <td>
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2 whitespace-nowrap w-full">
+                        <div class="tooltip" data-tip="${this.isFavorite(item.fund_code) ? '取消自选' : '加入自选'}">
+                            <button type="button" class="btn btn-xs favorite-btn ${this.isFavorite(item.fund_code) ? 'is-active' : ''}" onclick="FundSelector.toggleFavorite('${item.fund_code || ''}')" title="${this.isFavorite(item.fund_code) ? '取消自选' : '加入自选'}">
+                                <span class="favorite-btn-icon ${this.isFavorite(item.fund_code) ? 'is-active' : ''}">${this.isFavorite(item.fund_code) ? '★' : '☆'}</span>
+                            </button>
+                        </div>
+                        ${this.isFavorite(item.fund_code) ? `
+                        <div class="tooltip" data-tip="分组">
+                            <button type="button" class="btn btn-outline btn-xs fund-action-group" onclick="FundSelector.showAssignGroupModal('${item.fund_code || ''}')" title="分组">分组</button>
+                        </div>
+                        ` : ''}
                         <div class="tooltip" data-tip="添加持仓">
-                            <button type="button" class="btn btn-outline btn-xs" onclick="FundSelector.addToInvestment('${item.fund_code || ''}')" title="添加持仓">
+                            <button type="button" class="btn btn-outline btn-xs fund-action-add" onclick="FundSelector.addToInvestment('${item.fund_code || ''}')" title="添加持仓">
                                 <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                     <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
                                 </svg>
                             </button>
                         </div>
                         <div class="tooltip" data-tip="详情">
-                            <button type="button" class="btn btn-outline btn-xs" onclick="FundSelector.showDetail('${item.fund_code || ''}')" title="详情">
-                                详情
-                            </button>
+                            <button type="button" class="btn btn-outline btn-xs fund-action-detail" onclick="FundSelector.showDetail('${item.fund_code || ''}')" title="详情">详情</button>
                         </div>
                         <div class="tooltip" data-tip="分析">
                             <button type="button" class="btn btn-outline btn-xs" onclick="FundSelector.analyzeFund('${item.fund_code || ''}')" title="分析">
@@ -332,20 +452,150 @@ const FundSelector = {
         });
 
         paginationButtonsEl.innerHTML = `
-            <button type="button"
-                class="btn btn-sm btn-outline"
-                ${this.currentPage === 1 ? 'disabled' : ''}
-                onclick="FundSelector.changePage(${this.currentPage - 1})">
-                上一页
-            </button>
+            <button type="button" class="btn btn-sm btn-outline" ${this.currentPage === 1 ? 'disabled' : ''} onclick="FundSelector.changePage(${this.currentPage - 1})">上一页</button>
             ${pagesHtml}
-            <button type="button"
-                class="btn btn-sm btn-outline"
-                ${this.currentPage === totalPages ? 'disabled' : ''}
-                onclick="FundSelector.changePage(${this.currentPage + 1})">
-                下一页
-            </button>
+            <button type="button" class="btn btn-sm btn-outline" ${this.currentPage === totalPages ? 'disabled' : ''} onclick="FundSelector.changePage(${this.currentPage + 1})">下一页</button>
         `;
+    },
+
+    showGroupManageModal: function() {
+        this.renderGroupManageList();
+        document.getElementById('favorite-group-name-input').value = '';
+        document.getElementById('favorite-group-manage-modal').showModal();
+    },
+
+    renderGroupManageList: function() {
+        const container = document.getElementById('favorite-group-manage-list');
+        if (!container) return;
+
+        container.innerHTML = this.favoriteGroups.map(group => `
+            <div class="flex items-center gap-2">
+                <input type="text" id="favorite-group-edit-${group.group_id}" class="input input-bordered flex-1" value="${group.group_name}" ${group.is_system ? 'disabled' : ''}>
+                ${group.is_system ? '<span class="text-sm text-slate-400 px-2">系统</span>' : `
+                    <button type="button" class="btn btn-outline btn-sm" onclick="FundSelector.renameGroup('${group.group_id}')">重命名</button>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="FundSelector.deleteGroup('${group.group_id}')">删除</button>
+                `}
+            </div>
+        `).join('');
+    },
+
+    createGroup: async function() {
+        const input = document.getElementById('favorite-group-name-input');
+        const groupName = input ? input.value.trim() : '';
+        if (!groupName) {
+            showToast('请输入分组名称', 'warning');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/favorite-groups', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ group_name: groupName, created_at: new Date().toISOString() })
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || '新建分组失败');
+            }
+            await this.reloadData();
+            this.render();
+            this.renderGroupManageList();
+            input.value = '';
+            showToast('分组已创建', 'success');
+        } catch (error) {
+            showToast(error.message || '新建分组失败', 'error');
+        }
+    },
+
+    renameGroup: async function(groupId) {
+        const input = document.getElementById(`favorite-group-edit-${groupId}`);
+        const groupName = input ? input.value.trim() : '';
+        if (!groupName) {
+            showToast('请输入分组名称', 'warning');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/favorite-groups/${encodeURIComponent(groupId)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ group_name: groupName })
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || '重命名失败');
+            }
+            await this.reloadData();
+            this.render();
+            this.renderGroupManageList();
+            showToast('分组已重命名', 'success');
+        } catch (error) {
+            showToast(error.message || '重命名失败', 'error');
+        }
+    },
+
+    deleteGroup: async function(groupId) {
+        try {
+            const response = await fetch(`/api/favorite-groups/${encodeURIComponent(groupId)}`, { method: 'DELETE' });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || '删除分组失败');
+            }
+            await this.reloadData();
+            this.render();
+            this.renderGroupManageList();
+            showToast('分组已删除', 'success');
+        } catch (error) {
+            showToast(error.message || '删除分组失败', 'error');
+        }
+    },
+
+    showAssignGroupModal: function(fundCode) {
+        const fund = this.allFunds.find(item => item.fund_code === fundCode);
+        if (!fund) {
+            showToast('基金信息不存在', 'error');
+            return;
+        }
+
+        this.assigningFundCode = fundCode;
+        const title = document.getElementById('favorite-assign-group-fund-name');
+        const container = document.getElementById('favorite-assign-group-list');
+        if (title) title.textContent = `${fund.fund_name}（${fundCode}）`;
+        if (container) {
+            const currentGroupIds = new Set(this.favoriteMemberships.filter(item => item.fund_code === fundCode).map(item => item.group_id));
+            container.innerHTML = this.favoriteGroups.map(group => `
+                <label class="label cursor-pointer justify-start gap-3 rounded-xl border border-cyan-400/10 bg-white/5 px-4 py-3">
+                    <input type="checkbox" class="checkbox checkbox-sm" value="${group.group_id}" ${currentGroupIds.has(group.group_id) ? 'checked' : ''}>
+                    <span class="label-text">${group.group_name}${group.is_system ? '（系统）' : ''}</span>
+                </label>
+            `).join('');
+        }
+        document.getElementById('favorite-assign-group-modal').showModal();
+    },
+
+    saveAssignedGroups: async function() {
+        const container = document.getElementById('favorite-assign-group-list');
+        if (!container || !this.assigningFundCode) return;
+
+        const groupIds = Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(item => item.value);
+
+        try {
+            const response = await fetch(`/api/favorites/${encodeURIComponent(this.assigningFundCode)}/groups`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ group_ids: groupIds })
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || '保存分组失败');
+            }
+            await this.reloadData();
+            this.applyFilters();
+            document.getElementById('favorite-assign-group-modal').close();
+            showToast('分组已更新', 'success');
+        } catch (error) {
+            showToast(error.message || '保存分组失败', 'error');
+        }
     },
 
     showDetail: async function(fundCode) {
@@ -362,22 +612,17 @@ const FundSelector = {
         this.renderDetailModal(fund);
 
         const modal = document.getElementById('fund-detail-modal');
-        if (modal) {
-            modal.showModal();
-        }
+        if (modal) modal.showModal();
 
         try {
             const response = await fetch(`/api/funds/${encodeURIComponent(fundCode)}/overview`);
             const result = await response.json();
-
             if (!response.ok || !result.success) {
                 throw new Error(result.message || `HTTP ${response.status}`);
             }
-
             if (!result.data || Object.keys(result.data).length === 0) {
                 throw new Error('暂无基金详情数据');
             }
-
             this.detailData = result.data;
         } catch (error) {
             this.detailError = error.message;
@@ -395,13 +640,9 @@ const FundSelector = {
         const errorTextEl = document.getElementById('fund-detail-error-text');
         const contentEl = document.getElementById('fund-detail-content');
         const tableBody = document.getElementById('fund-detail-table-body');
-
-        if (!titleEl || !loadingEl || !errorEl || !errorTextEl || !contentEl || !tableBody) {
-            return;
-        }
+        if (!titleEl || !loadingEl || !errorEl || !errorTextEl || !contentEl || !tableBody) return;
 
         titleEl.textContent = fund && fund.fund_name ? fund.fund_name : '基金详情';
-
         loadingEl.classList.add('hidden');
         errorEl.classList.add('hidden');
         contentEl.classList.add('hidden');
@@ -411,14 +652,12 @@ const FundSelector = {
             tableBody.innerHTML = '';
             return;
         }
-
         if (this.detailError) {
             errorTextEl.textContent = this.detailError;
             errorEl.classList.remove('hidden');
             tableBody.innerHTML = '';
             return;
         }
-
         if (!this.detailData || Object.keys(this.detailData).length === 0) {
             errorTextEl.textContent = '暂无基金详情数据';
             errorEl.classList.remove('hidden');
@@ -428,11 +667,9 @@ const FundSelector = {
 
         const entries = Object.entries(this.detailData);
         let rowsHtml = '';
-
         for (let index = 0; index < entries.length; index += 2) {
             const left = entries[index];
             const right = entries[index + 1];
-
             rowsHtml += `
                 <tr>
                     <th class="w-32 text-xs text-slate-300 align-top">${left[0]}</th>
@@ -442,7 +679,6 @@ const FundSelector = {
                 </tr>
             `;
         }
-
         tableBody.innerHTML = rowsHtml;
         contentEl.classList.remove('hidden');
     },
@@ -453,15 +689,69 @@ const FundSelector = {
             showToast('基金信息不存在', 'error');
             return;
         }
-
         if (typeof window.switchMainTab === 'function') {
             window.switchMainTab('investment');
         }
+        InvestmentUI.showAddModal({ fund_code: fund.fund_code || '', fund_name: fund.fund_name || '' });
+    },
 
-        InvestmentUI.showAddModal({
-            fund_code: fund.fund_code || '',
-            fund_name: fund.fund_name || ''
-        });
+    isFavorite: function(fundCode) {
+        return this.favoriteFundCodes.has(fundCode);
+    },
+
+    toggleFavorite: async function(fundCode) {
+        if (!fundCode) return;
+
+        if (this.isFavorite(fundCode)) {
+            await this.removeFavorite(fundCode);
+            return;
+        }
+
+        const fund = this.allFunds.find(item => item.fund_code === fundCode);
+        if (!fund) {
+            showToast('基金信息不存在', 'error');
+            return;
+        }
+        await this.addFavorite(fund);
+    },
+
+    addFavorite: async function(fund) {
+        const createdAt = new Date().toISOString();
+        try {
+            const response = await fetch('/api/favorites', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    fund_code: fund.fund_code || '',
+                    fund_name: fund.fund_name || '',
+                    created_at: createdAt
+                })
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || '加入自选失败');
+            }
+            await this.reloadData();
+            this.applyFilters();
+            showToast('已加入自选', 'success');
+        } catch (error) {
+            showToast(error.message || '加入自选失败', 'error');
+        }
+    },
+
+    removeFavorite: async function(fundCode) {
+        try {
+            const response = await fetch(`/api/favorites/${encodeURIComponent(fundCode)}`, { method: 'DELETE' });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || '取消自选失败');
+            }
+            await this.reloadData();
+            this.applyFilters();
+            showToast('已取消自选', 'success');
+        } catch (error) {
+            showToast(error.message || '取消自选失败', 'error');
+        }
     },
 
     analyzeFund: function(fundCode) {

@@ -2,6 +2,9 @@
 import json
 import csv
 import os
+import time
+import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from .cache import FundCache
 from .adapters.factory import create_datasource
 from .adapters.base import BaseDataSource
@@ -18,6 +21,10 @@ class FundRepository:
         self._ensure_data_dir()
         self.cache = FundCache()
         self.datasource = self._load_active_datasource()
+        # 实时估值：仅内存缓存（默认 60 秒）
+        self._gz_cache: dict[str, dict] = {}
+        self._gz_cache_ttl_seconds: int = 60
+        self._gz_max_workers: int = 8
 
     def _ensure_data_dir(self):
         """确保数据目录存在"""
@@ -109,6 +116,13 @@ class FundRepository:
 
         return self.datasource.get_fund_overview(fund_code)
 
+
+    def get_fund_history(self, fund_code: str, start_date: str | None = None, end_date: str | None = None) -> list[dict]:
+        """获取基金历史净值序列。"""
+        if self.datasource is None:
+            raise RuntimeError("当前没有激活的数据源")
+        return self.datasource.get_fund_history(fund_code, start_date, end_date)
+
     def get_cache_info(self) -> dict:
         """
         获取缓存状态
@@ -121,3 +135,105 @@ class FundRepository:
     def reload_datasource(self):
         """重新加载数据源（配置变更后调用）"""
         self.datasource = self._load_active_datasource()
+
+    # =====================
+    # 实时估值 / 涨跌幅
+    # =====================
+    def get_fund_gz(self, fund_code: str) -> dict:
+        """
+        获取单只基金实时估值（带 60 秒内存缓存）。
+
+        Returns:
+            {"fund_code": "...", "percentage": float|None, "gztime": str|None}
+        """
+        code = str(fund_code or "").strip()
+        if not re.fullmatch(r"\d{5,8}", code):
+            raise ValueError("基金代码格式错误（需 5-8 位数字）")
+
+        now = time.time()
+        cached = self._gz_cache.get(code)
+        if cached and (now - float(cached.get("ts", 0))) <= self._gz_cache_ttl_seconds:
+            return cached.get("data") or {"fund_code": code, "percentage": None, "gztime": None, "gz_time": None}
+
+        if self.datasource is None:
+            raise RuntimeError("当前没有激活的数据源")
+
+        data = self.datasource.get_fund_gz(code)
+        normalized = {
+            "fund_code": data.get("fund_code", code),
+            "percentage": data.get("percentage"),
+            "gztime": data.get("gztime"),
+            "gz_time": data.get("gz_time"),
+        }
+        self._gz_cache[code] = {"ts": now, "data": normalized}
+        return normalized
+
+    def get_fund_gz_batch(self, fund_codes: list[str]) -> list[dict]:
+        """
+        批量获取实时估值（部分失败也返回），带 60 秒内存缓存。
+
+        Returns:
+            [
+              {"fund_code": "...", "percentage": 0.18, "gztime": "..."},
+              {"fund_code": "...", "percentage": None, "gztime": None, "error": "..."},
+            ]
+        """
+        if self.datasource is None:
+            raise RuntimeError("当前没有激活的数据源")
+
+        codes_in = [str(x or "").strip() for x in (fund_codes or [])]
+        # 保持输入顺序 + 去重
+        seen: set[str] = set()
+        codes: list[str] = []
+        for c in codes_in:
+            if c and c not in seen:
+                seen.add(c)
+                codes.append(c)
+
+        now = time.time()
+        items_by_code: dict[str, dict] = {}
+        pending: list[str] = []
+
+        for code in codes:
+            if not re.fullmatch(r"\d{5,8}", code):
+                items_by_code[code] = {
+                    "fund_code": code,
+                    "percentage": None,
+                    "gztime": None,
+                    "gz_time": None,
+                    "error": "基金代码格式错误（需 5-8 位数字）",
+                }
+                continue
+
+            cached = self._gz_cache.get(code)
+            if cached and (now - float(cached.get("ts", 0))) <= self._gz_cache_ttl_seconds:
+                items_by_code[code] = cached.get("data") or {"fund_code": code, "percentage": None, "gztime": None, "gz_time": None}
+            else:
+                pending.append(code)
+
+        if pending:
+            with ThreadPoolExecutor(max_workers=self._gz_max_workers) as executor:
+                future_map = {executor.submit(self.datasource.get_fund_gz, code): code for code in pending}
+                for future in as_completed(future_map):
+                    code = future_map[future]
+                    try:
+                        data = future.result()
+                        normalized = {
+                            "fund_code": data.get("fund_code", code),
+                            "percentage": data.get("percentage"),
+                            "gztime": data.get("gztime"),
+                            "gz_time": data.get("gz_time"),
+                        }
+                        items_by_code[code] = normalized
+                        self._gz_cache[code] = {"ts": time.time(), "data": normalized}
+                    except Exception as exc:
+                        items_by_code[code] = {
+                            "fund_code": code,
+                            "percentage": None,
+                            "gztime": None,
+                            "gz_time": None,
+                            "error": str(exc),
+                        }
+
+        # 按输入 codes 顺序输出
+        return [items_by_code.get(code, {"fund_code": code, "percentage": None, "gztime": None, "gz_time": None}) for code in codes]
