@@ -3,11 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>策略详情 - 一个亿小目标</title>
+    <title>组合策略详情 - 一个亿小目标</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/favicon.svg') }}">
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.6.0/dist/full.min.css" rel="stylesheet" type="text/css" />
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body class="min-h-screen bg-cover bg-center bg-fixed" style="background-image: url('{{ url_for('static', filename='images/background.jpg') }}');">
@@ -17,8 +19,8 @@
                 <div class="flex items-center gap-3">
                     <img src="{{ url_for('static', filename='images/logo.svg') }}" alt="Logo" class="w-10 h-10">
                     <div>
-                        <h1 class="text-3xl font-bold shimmer-text">策略详情</h1>
-                        <p class="text-sm text-slate-300 mt-1">配置基金、期间、策略参数并分析表现</p>
+                        <h1 class="text-3xl font-bold shimmer-text">组合策略详情</h1>
+                        <p class="text-sm text-slate-300 mt-1">配置基金、区间与单一策略组合，完成完整分析方案</p>
                     </div>
                 </div>
                 <a href="/#strategy" class="btn btn-outline btn-sm">返回首页</a>
@@ -32,7 +34,7 @@
                             <input id="strategy-detail-name" type="text" class="input input-bordered w-full" placeholder="请输入策略名称后保存">
                         </div>
                         <div class="flex flex-wrap items-center gap-2 self-end">
-                            <button type="button" id="strategy-detail-save-btn" class="btn btn-sm btn-primary">保存策略</button>
+                            <button type="button" id="strategy-detail-save-btn" class="btn btn-sm btn-primary">保存组合策略</button>
                             <button type="button" id="strategy-detail-delete-btn" class="btn btn-sm btn-outline hidden">删除策略</button>
                             <button type="button" id="strategy-detail-run-btn" class="btn btn-sm btn-accent">运行分析</button>
                         </div>
@@ -73,12 +75,6 @@
                                         <button type="button" class="btn btn-xs btn-outline" data-preset="3y">3年</button>
                                         <button type="button" class="btn btn-xs btn-outline" data-preset="all">全部</button>
                                     </div>
-                                    <div class="strategy-detail-status text-sm text-slate-300">
-                                        <span class="badge badge-outline">当前基金</span>
-                                        <span id="strategy-detail-selected-fund">未选择</span>
-                                        <span class="badge badge-outline">期间</span>
-                                        <span id="strategy-detail-selected-range">半年</span>
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -87,8 +83,8 @@
                             <div class="card-body p-4">
                                 <div class="flex flex-wrap items-start justify-between gap-3 mb-3">
                                     <div>
-                                        <h3 class="font-bold">内置策略</h3>
-                                        <p class="text-xs text-slate-300 mt-1">支持单策略与多策略组合，参数区域已做紧凑布局</p>
+                                        <h3 class="font-bold">单一策略组合</h3>
+                                        <p class="text-xs text-slate-300 mt-1">从单一策略库中添加策略模块，组合出完整分析方案</p>
                                     </div>
                                     <span id="strategy-detail-stack-count" class="badge badge-outline">0 个</span>
                                 </div>
@@ -107,9 +103,12 @@
                                 <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
                                     <div>
                                         <h3 class="font-bold">分析图表</h3>
-                                        <p class="text-xs text-slate-300 mt-1">满宽展示基金净值、指标叠加与买卖点</p>
+                                        <p class="text-xs text-slate-300 mt-1">支持滚轮缩放、拖拽平移，满宽展示基金净值开收实体、指标叠加与买卖点</p>
                                     </div>
-                                    <span class="badge badge-outline">走势图</span>
+                                    <div class="flex items-center gap-2">
+                                        <button type="button" id="strategy-detail-reset-zoom-btn" class="btn btn-xs btn-outline">重置缩放</button>
+                                        <span class="badge badge-outline">开收实体图</span>
+                                    </div>
                                 </div>
                                 <div class="rounded-2xl border border-white/10 bg-black/20 p-3 relative h-[420px] lg:h-[520px]">
                                     <canvas id="strategy-detail-chart" class="w-full h-full"></canvas>
@@ -128,9 +127,7 @@
                                 <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
                                     <div>
                                         <h3 class="font-bold">分析结果</h3>
-                                        <p id="strategy-detail-summary" class="text-xs text-slate-300 mt-1">请选择基金并运行分析</p>
                                     </div>
-                                    <span id="strategy-detail-signal-count" class="badge badge-outline">0 个</span>
                                 </div>
                                 <div id="strategy-detail-signals-loading" class="hidden rounded-2xl border border-white/10 bg-black/15 p-6 text-center">
                                     <span class="loading loading-spinner loading-md text-cyan-300"></span>
@@ -138,6 +135,58 @@
                                 </div>
                                 <div id="strategy-detail-signals" class="strategy-detail-signals-grid max-h-[560px] overflow-y-auto pr-1">
                                     <div class="text-sm text-slate-300">暂无分析结果。</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card neon-border strategy-detail-card">
+                            <div class="card-body p-4">
+                                <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                                    <div>
+                                        <h3 class="font-bold">模拟买卖（回测）</h3>
+                                        <p class="text-xs text-slate-300 mt-1">根据买卖点信号模拟空仓/全仓交易，计算最终收益率（默认不考虑手续费与滑点）</p>
+                                    </div>
+                                    <span id="strategy-backtest-trade-count" class="badge badge-outline">0 笔</span>
+                                </div>
+
+                                <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3">
+                                    <div>
+                                        <label class="label py-1"><span class="label-text">初始资金</span></label>
+                                        <input id="strategy-backtest-initial-cash" type="number" class="input input-bordered h-10 min-h-10 w-full" min="0" step="1" value="10000">
+                                    </div>
+                                    <div class="lg:col-span-2 flex items-end gap-2">
+                                        <button type="button" id="strategy-export-signals-btn" class="btn btn-sm btn-outline">导出信号CSV</button>
+                                        <button type="button" id="strategy-export-trades-btn" class="btn btn-sm btn-outline">导出交易CSV</button>
+                                        <button type="button" id="strategy-export-report-btn" class="btn btn-sm btn-outline">导出报告PNG</button>
+                                        <button type="button" id="strategy-export-debug-btn" class="btn btn-sm btn-outline">导出诊断JSON</button>
+                                        <div id="strategy-backtest-hint" class="text-xs text-slate-300"></div>
+                                    </div>
+                                </div>
+
+                                <div class="rounded-2xl border border-white/10 bg-black/15 p-3 mb-3">
+                                    <div id="strategy-backtest-summary" class="text-sm text-slate-200">请先运行分析以生成买卖点。</div>
+                                </div>
+
+                                <div class="overflow-x-auto rounded-2xl border border-white/10 bg-black/15">
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>日期</th>
+                                                <th>动作</th>
+                                                <th>成交净值</th>
+                                                <th>成交份额</th>
+                                                <th>现金</th>
+                                                <th>持仓份额</th>
+                                                <th>持仓市值</th>
+                                                <th>触发信号</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="strategy-backtest-trades">
+                                            <tr>
+                                                <td colspan="8" class="text-sm text-slate-300">暂无回测记录。</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>
@@ -150,7 +199,28 @@
     <script>
         window.STRATEGY_DETAIL_BOOTSTRAP = {{ bootstrap | tojson }};
     </script>
+
+    <div id="strategy-export-report-root" style="position:fixed;left:0;top:0;width:1080px;background:#020617;color:#f1f5f9;padding:24px;opacity:0;pointer-events:none;z-index:-1;">
+        <!-- JS 渲染导出报告内容 -->
+    </div>
+
+    <!-- 删除确认模态框 -->
+    <dialog id="strategy-delete-modal" class="modal">
+        <div class="modal-box bg-base-300/90 backdrop-blur-md">
+            <h3 class="font-bold text-lg mb-4 text-error">确认删除</h3>
+            <p class="py-4" id="strategy-delete-message">确定要删除当前组合策略吗？删除后不可恢复。</p>
+            <div class="modal-action">
+                <button type="button" class="btn" onclick="document.getElementById('strategy-delete-modal').close()">取消</button>
+                <button type="button" class="btn btn-error" id="strategy-delete-confirm-btn">删除</button>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+            <button>关闭</button>
+        </form>
+    </dialog>
+
     <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="{{ url_for('static', filename='js/strategy-detail.js') }}"></script>
 </body>
 </html>

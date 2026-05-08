@@ -19,7 +19,7 @@ templates/
 ├── index.html              # 主布局骨架
 └── partials/
     ├── tab-investment.html     # 投资计划 Tab（内含模态框引入）
-    ├── tab-fund-select.html    # 多维选基 Tab
+    ├── tab-fund-select.html    # 基金市场 Tab
     ├── tab-annualized.html     # 年化计算器 Tab
     ├── tab-compound.html       # 复利计算器 Tab
     ├── modal-investment.html   # 投资记录模态框
@@ -44,7 +44,7 @@ index.html
 |------|------|
 | `index.html` | `<head>`, 导航栏, Tab include, JS 引入, Tab 切换逻辑 |
 | `tab-investment.html` | 投资计划卡片 + 2 个模态框 include |
-| `tab-fund-select.html` | 多维选基卡片（待实现占位） |
+| `tab-fund-select.html` | 基金市场卡片（待实现占位） |
 | `tab-annualized.html` | 年化计算器卡片 + 子 Tab |
 | `tab-compound.html` | 复利计算器卡片 |
 | `modal-investment.html` | 添加/编辑投资记录 dialog |

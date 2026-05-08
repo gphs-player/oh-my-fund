@@ -17,13 +17,19 @@
 ## 工程现状（以代码为准）
 
 - 持久化已迁移为服务端 CSV（`data/` 下文件），不再依赖浏览器 `localStorage`
-- 已有基金数据仓库层（`warehouse/`）：数据源切换 + 基金列表缓存（内存 + CSV）
+- 已有基金数据仓库层（`warehouse/`）：数据源切换 + 基金列表缓存（内存 + CSV）+ 历史净值缓存（内存 + CSV）
+- 数据源兜底：当前激活数据源失败时，会自动用 Default 数据源重试并返回
+- 数据源切换：激活/停用数据源后会强制清理本地缓存（基金列表/历史净值/实时估值），避免读到旧数据
 - 默认数据源已支持：
   - 基金列表
   - 基金基本概况
   - 基金历史净值
   - 实时估值 / 涨跌幅
-- 多维选基模块已支持：
+- 新增东方财富手机接口数据源（`eastmoney_mob`）已支持：
+  - 基金列表（支持 `pageNum/pageSize` 分页、`fund_type_code` 类型过滤）
+  - 基金类型列表（固定枚举）
+  - 基金详情（四块：基金详情/JJXQ、阶段涨幅/JDZF、基金规模/JJGM、基金持仓/JJCC）
+- 基金市场模块已支持：
   - “全部” / “自选”双视图
   - 搜索 / 筛选 / 分页
   - 基金详情弹层
@@ -33,6 +39,10 @@
   - 首页 `策略` Tab：展示策略列表与新建入口
   - 独立详情页：`/strategies/new`、`/strategies/<strategy_id>`
   - 详情页支持基金选择、期间快捷选择、日期选择器、加载净值、内置策略组合、参数调整、运行分析、保存、删除
+  - 图表当前为开收实体图，支持策略叠加线、买卖点、滚轮缩放、拖拽平移、重置缩放
+  - 策略分析 + 回测已合并为统一接口：`POST /api/strategy-run`（一次返回分析结果 + 回测结果）
+  - 回测引擎已下沉到后端（`strategies/backtest.py`），前端只负责渲染
+  - 详情页“模拟买卖（回测）”：交易明细、期末估值（未平仓）、持仓市值列、Buy & Hold 基准对比与超额收益；并支持导出（信号 CSV / 交易 CSV / 诊断 JSON / 回测报告 PNG）
 - 策略记录当前支持“单策略”与“多策略组合”两种使用方式，底层都保存为 `stack`
 - 新增 `strategies/` 目录，每个内置策略为一个独立 Python 文件
 
@@ -60,9 +70,11 @@ fund-calculator/
 │   ├── datasources.csv
 │   ├── settings.csv
 │   ├── strategies.csv
-│   └── funds_list_cache_*.csv
+│   ├── funds_list_cache_*.csv
+│   └── fund_history_cache_<fund_code>_*.csv
 ├── strategies/
 │   ├── base.py
+│   ├── backtest.py
 │   ├── registry.py
 │   ├── trend_sma.py
 │   ├── rsi.py
@@ -75,6 +87,7 @@ fund-calculator/
 │       ├── base.py
 │       ├── default.py
 │       ├── eastmoney_overview.py
+│       ├── eastmoney_mob.py
 │       ├── factory.py
 │       ├── lixinger.py
 │       └── tushare.py
@@ -125,13 +138,15 @@ fund-calculator/
 | GET | `/api/strategies/<strategy_id>` | 获取单条策略详情 |
 | PUT | `/api/strategies/<strategy_id>` | 更新策略 |
 | DELETE | `/api/strategies/<strategy_id>` | 删除策略 |
-| POST | `/api/strategy-analysis/run` | 执行策略分析 |
+| POST | `/api/strategy-run` | 执行策略分析 + 回测（推荐） |
+| POST | `/api/strategy-analysis/run` | 执行策略分析（兼容旧逻辑） |
 
 ### 基金接口（策略相关）
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/api/funds` | 获取基金列表 |
+| GET | `/api/funds/types` | 获取基金类型列表（用于筛选） |
 | GET | `/api/funds/<fund_code>/overview` | 获取基金基本概况 |
 | GET | `/api/funds/<fund_code>/history` | 获取历史净值 |
 | GET | `/api/funds/<fund_code>/gz` | 获取单只基金实时估值 |
@@ -183,6 +198,15 @@ document.addEventListener('DOMContentLoaded', function() {
     "end_date": "2026-06-30",
     "full_history": false
   },
+  "backtest_config": {
+    "initial_cash": 10000,
+    "fill_model": "same_day_nav",
+    "sizing_mode": "all_in",
+    "fixed_amount": 1000,
+    "fixed_percent": 1,
+    "fee_rate": 0
+  },
+  "signal_overrides": [],
   "stack": [
     {
       "strategy_type": "trend_sma",
@@ -213,16 +237,41 @@ document.addEventListener('DOMContentLoaded', function() {
 - `signals`
 - `meta`
 
+其中 signals 已补充字段（以代码为准）：
+
+- `signal_uid`：信号唯一标识（便于后续覆盖与追踪）
+- `price_ref`：用于回测取价的参考值（默认等于 value）
+
 ### 历史净值与分析
 
 - 历史净值统一通过 `FundRepository.get_fund_history()` 获取
 - 当前默认数据源走东方财富历史净值接口
+- 数据源层当前始终抓取基金**全量历史净值**
+- `FundRepository` 会对单基金历史净值做**当日缓存**
+- `start_date / end_date / full_history` 当前由服务端本地过滤
 - “全部”区间通过 `full_history=true` 表达
 - 前端详情页负责：
   - 快捷区间与日期选择器联动
   - 加载净值
-  - 运行分析
-  - 渲染图表与信号列表
+  - 调用 `/api/strategy-run` 运行分析 + 回测并渲染结果
+  - 渲染开收实体图、叠加线与信号列表
+  - 展示回测结果：交易明细、期末估值（未平仓）、持仓市值列、Buy & Hold 基准对比与超额收益（回测计算在后端）
+  - 导出诊断信息（信号 CSV / 交易 CSV / 诊断 JSON）与回测报告 PNG（前端截图导出）
+
+### 配色语义约定（重要）
+
+- 红色：赚 / 涨 / 买入
+- 绿色：亏 / 跌 / 卖出
+
+### 缓存现状
+
+- 基金列表缓存：
+  - 内存 + CSV
+  - 受 `settings.csv` 中 `cache_expire_days` 控制
+- 历史净值缓存：
+  - 内存 + CSV
+  - 仅当天有效，跨天自动失效
+  - 文件模式：`fund_history_cache_<fund_code>_YYYY_MM_DD.csv`
 
 ## 常见开发任务
 
@@ -247,9 +296,10 @@ document.addEventListener('DOMContentLoaded', function() {
 ### 修改历史净值加载
 
 1. `warehouse/repository.py`
-2. `warehouse/adapters/base.py`
-3. `warehouse/adapters/default.py`
-4. 如涉及详情页交互，再同步修改 `static/js/strategy-detail.js`
+2. `warehouse/cache.py`
+3. `warehouse/adapters/base.py`
+4. `warehouse/adapters/default.py`
+5. 如涉及详情页交互，再同步修改 `static/js/strategy-detail.js`
 
 ## 错误处理模式
 
@@ -278,10 +328,18 @@ try {
 - [ ] 详情页基金搜索可用
 - [ ] 半年 / 1年 / 2年 / 3年 / 全部 与日期选择器联动正常
 - [ ] 加载净值正常
+- [ ] 开收实体图渲染正常
+- [ ] 图表滚轮缩放 / 拖拽平移 / 重置缩放正常
+- [ ] 买卖点不会明显压住实体图与均线交叉位置
 - [ ] 运行分析正常
+- [ ] 回测摘要（总收益率 / 持仓收益率 / 浮动盈亏 / Buy & Hold / 超额）展示正确
+- [ ] 交易明细包含“持仓市值”列且数值合理
+- [ ] 未平仓时：明细包含“期末估值（未平仓）”行
+- [ ] 导出信号 CSV / 交易 CSV / 诊断 JSON 可用
+- [ ] 红涨绿跌、红买绿卖配色语义正确
 - [ ] 单策略与多策略组合都能保存和回填
 - [ ] 已保存策略可删除
-- [ ] 多维选基、自选分组、设置、计算器未被破坏
+- [ ] 基金市场、自选分组、设置、计算器未被破坏
 
 ## 备注
 

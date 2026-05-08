@@ -561,6 +561,27 @@ body {
     padding: 1.25rem;
 }
 
+.fund-detail-modal-box {
+    max-height: 96vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.fund-detail-modal-box #fund-detail-content.fund-detail-content-scroll {
+    overflow-y: auto;
+    padding-right: 2px; /* 避免滚动条压住内容 */
+}
+
+.fund-detail-modal-box #fund-detail-content > .tabs {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: rgba(30, 41, 59, 0.98);
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+}
+
 .modal-box h3 {
     margin-bottom: 0.75rem;
     font-size: 1.1rem;
@@ -734,5 +755,24 @@ body {
 
     .strategy-detail-status {
         width: 100%;
+    }
+}
+
+
+/* 策略中心左右双分区 */
+.strategy-tab-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) minmax(320px, 1fr);
+    gap: 1rem;
+    align-items: start;
+}
+
+.strategy-tab-layout .card-body {
+    min-height: auto;
+}
+
+@media (max-width: 1023px) {
+    .strategy-tab-layout {
+        grid-template-columns: 1fr;
     }
 }

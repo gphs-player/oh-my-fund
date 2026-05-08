@@ -52,5 +52,6 @@ def get_available_types() -> list[dict]:
 
 # 导入具体实现以触发注册
 from . import default  # noqa: F401, E402
+from . import eastmoney_mob  # noqa: F401, E402
 from . import lixinger  # noqa: F401, E402
 from . import tushare  # noqa: F401, E402

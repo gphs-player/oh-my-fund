@@ -1,0 +1,341 @@
+{
+  "exported_at": "2026-04-24T11:47:25.772Z",
+  "page": "strategy_detail",
+  "strategy_id": "",
+  "strategy_name": "",
+  "fund": {
+    "fund_code": "159513",
+    "fund_name": "纳斯达克100ETF大成"
+  },
+  "date_range": {
+    "preset": "1y",
+    "start_date": "2025-04-24",
+    "end_date": "2026-04-24",
+    "full_history": false
+  },
+  "stack": [
+    {
+      "strategy_type": "trend_sma",
+      "enabled": true,
+      "display_enabled": true,
+      "params": {
+        "fast_window": 5,
+        "slow_window": 20
+      },
+      "client_uid": "trend_sma-1777031223623-3657dc"
+    }
+  ],
+  "analysis": {
+    "history_count": 242,
+    "history_last": {
+      "date": "2026-04-23",
+      "unit_nav": 1.5397,
+      "daily_return": -0.53
+    },
+    "signals_count": 16,
+    "signals": [
+      {
+        "action": "sell",
+        "date": "2025-08-06",
+        "reason": "MA5 下穿 MA20",
+        "strategy_name": "双均线趋势",
+        "strategy_type": "trend_sma",
+        "title": "死叉卖出",
+        "value": 1.3976
+      },
+      {
+        "action": "buy",
+        "date": "2025-08-08",
+        "reason": "MA5 上穿 MA20",
+        "strategy_name": "双均线趋势",
+        "strategy_type": "trend_sma",
+        "title": "金叉买入",
+        "value": 1.4147
+      },
+      {
+        "action": "sell",
+        "date": "2025-08-22",
+        "reason": "MA5 下穿 MA20",
+        "strategy_name": "双均线趋势",
+        "strategy_type": "trend_sma",
+        "title": "死叉卖出",
+        "value": 1.4063
+      },
+      {
+        "action": "buy",
+        "date": "2025-08-28",
+        "reason": "MA5 上穿 MA20",
+        "strategy_name": "双均线趋势",
+        "strategy_type": "trend_sma",
+        "title": "金叉买入",
+        "value": 1.4136
+      },
+      {
+        "action": "sell",
+        "date": "2025-08-29",
+        "reason": "MA5 下穿 MA20",
+        "strategy_name": "双均线趋势",
+        "strategy_type": "trend_sma",
+        "title": "死叉卖出",
+        "value": 1.3959
+      },
+      {
+        "action": "buy",
+        "date": "2025-09-09",
+        "reason": "MA5 上穿 MA20",
+        "strategy_name": "双均线趋势",
+        "strategy_type": "trend_sma",
+        "title": "金叉买入",
+        "value": 1.4207
+      },
+      {
+        "action": "sell",
+        "date": "2025-11-11",
+        "reason": "MA5 下穿 MA20",
+        "strategy_name": "双均线趋势",
+        "strategy_type": "trend_sma",
+        "title": "死叉卖出",
+        "value": 1.5148
+      },
+      {
+        "action": "buy",
+        "date": "2025-11-28",
+        "reason": "MA5 上穿 MA20",
+        "strategy_name": "双均线趋势",
+        "strategy_type": "trend_sma",
+        "title": "金叉买入",
+        "value": 1.5069
+      },
+      {
+        "action": "sell",
+        "date": "2025-12-17",
+        "reason": "MA5 下穿 MA20",
+        "strategy_name": "双均线趋势",
+        "strategy_type": "trend_sma",
+        "title": "死叉卖出",
+        "value": 1.4556
+      },
+      {
+        "action": "buy",
+        "date": "2025-12-25",
+        "reason": "MA5 上穿 MA20",
+        "strategy_name": "双均线趋势",
+        "strategy_type": "trend_sma",
+        "title": "金叉买入",
+        "value": 1.5123
+      },
+      {
+        "action": "sell",
+        "date": "2026-01-05",
+        "reason": "MA5 下穿 MA20",
+        "strategy_name": "双均线趋势",
+        "strategy_type": "trend_sma",
+        "title": "死叉卖出",
+        "value": 1.4938
+      },
+      {
+        "action": "buy",
+        "date": "2026-01-09",
+        "reason": "MA5 上穿 MA20",
+        "strategy_name": "双均线趋势",
+        "strategy_type": "trend_sma",
+        "title": "金叉买入",
+        "value": 1.513
+      },
+      {
+        "action": "sell",
+        "date": "2026-01-19",
+        "reason": "MA5 下穿 MA20",
+        "strategy_name": "双均线趋势",
+        "strategy_type": "trend_sma",
+        "title": "死叉卖出",
+        "value": 1.4973
+      },
+      {
+        "action": "buy",
+        "date": "2026-01-27",
+        "reason": "MA5 上穿 MA20",
+        "strategy_name": "双均线趋势",
+        "strategy_type": "trend_sma",
+        "title": "金叉买入",
+        "value": 1.5175
+      },
+      {
+        "action": "sell",
+        "date": "2026-02-04",
+        "reason": "MA5 下穿 MA20",
+        "strategy_name": "双均线趋势",
+        "strategy_type": "trend_sma",
+        "title": "死叉卖出",
+        "value": 1.4505
+      },
+      {
+        "action": "buy",
+        "date": "2026-04-08",
+        "reason": "MA5 上穿 MA20",
+        "strategy_name": "双均线趋势",
+        "strategy_type": "trend_sma",
+        "title": "金叉买入",
+        "value": 1.4332
+      }
+    ]
+  },
+  "backtest": {
+    "params": {
+      "initial_cash": 10000
+    },
+    "result": {
+      "initial_cash": 10000,
+      "final_equity": 10148.3320134831,
+      "total_return": 0.014833201348309899,
+      "buy_count": 8,
+      "sell_count": 7,
+      "trade_count": 15,
+      "skipped_count": 0,
+      "holding": true,
+      "last_price": 1.5397,
+      "entry_price": 1.4332,
+      "entry_date": "2026-04-08",
+      "unrealized_return": 0.07430923806865763,
+      "unrealized_pnl": 701.9532112982727
+    },
+    "trades_count": 15,
+    "trades": [
+      {
+        "date": "2025-08-08",
+        "action": "买入",
+        "price": 1.4147,
+        "shares_delta": 7068.636460026861,
+        "cash_after": 0,
+        "shares_after": 7068.636460026861,
+        "note": "双均线趋势：金叉买入"
+      },
+      {
+        "date": "2025-08-22",
+        "action": "卖出",
+        "price": 1.4063,
+        "shares_delta": -7068.636460026861,
+        "cash_after": 9940.623453735774,
+        "shares_after": 0,
+        "note": "双均线趋势：死叉卖出"
+      },
+      {
+        "date": "2025-08-28",
+        "action": "买入",
+        "price": 1.4136,
+        "shares_delta": 7032.133173270921,
+        "cash_after": 0,
+        "shares_after": 7032.133173270921,
+        "note": "双均线趋势：金叉买入"
+      },
+      {
+        "date": "2025-08-29",
+        "action": "卖出",
+        "price": 1.3959,
+        "shares_delta": -7032.133173270921,
+        "cash_after": 9816.15469656888,
+        "shares_after": 0,
+        "note": "双均线趋势：死叉卖出"
+      },
+      {
+        "date": "2025-09-09",
+        "action": "买入",
+        "price": 1.4207,
+        "shares_delta": 6909.378965699218,
+        "cash_after": 0,
+        "shares_after": 6909.378965699218,
+        "note": "双均线趋势：金叉买入"
+      },
+      {
+        "date": "2025-11-11",
+        "action": "卖出",
+        "price": 1.5148,
+        "shares_delta": -6909.378965699218,
+        "cash_after": 10466.327257241175,
+        "shares_after": 0,
+        "note": "双均线趋势：死叉卖出"
+      },
+      {
+        "date": "2025-11-28",
+        "action": "买入",
+        "price": 1.5069,
+        "shares_delta": 6945.601736837996,
+        "cash_after": 0,
+        "shares_after": 6945.601736837996,
+        "note": "双均线趋势：金叉买入"
+      },
+      {
+        "date": "2025-12-17",
+        "action": "卖出",
+        "price": 1.4556,
+        "shares_delta": -6945.601736837996,
+        "cash_after": 10110.017888141387,
+        "shares_after": 0,
+        "note": "双均线趋势：死叉卖出"
+      },
+      {
+        "date": "2025-12-25",
+        "action": "买入",
+        "price": 1.5123,
+        "shares_delta": 6685.193340039269,
+        "cash_after": 0,
+        "shares_after": 6685.193340039269,
+        "note": "双均线趋势：金叉买入"
+      },
+      {
+        "date": "2026-01-05",
+        "action": "卖出",
+        "price": 1.4938,
+        "shares_delta": -6685.193340039269,
+        "cash_after": 9986.34181135066,
+        "shares_after": 0,
+        "note": "双均线趋势：死叉卖出"
+      },
+      {
+        "date": "2026-01-09",
+        "action": "买入",
+        "price": 1.513,
+        "shares_delta": 6600.358103999114,
+        "cash_after": 0,
+        "shares_after": 6600.358103999114,
+        "note": "双均线趋势：金叉买入"
+      },
+      {
+        "date": "2026-01-19",
+        "action": "卖出",
+        "price": 1.4973,
+        "shares_delta": -6600.358103999114,
+        "cash_after": 9882.716189117875,
+        "shares_after": 0,
+        "note": "双均线趋势：死叉卖出"
+      },
+      {
+        "date": "2026-01-27",
+        "action": "买入",
+        "price": 1.5175,
+        "shares_delta": 6512.498312433525,
+        "cash_after": 0,
+        "shares_after": 6512.498312433525,
+        "note": "双均线趋势：金叉买入"
+      },
+      {
+        "date": "2026-02-04",
+        "action": "卖出",
+        "price": 1.4505,
+        "shares_delta": -6512.498312433525,
+        "cash_after": 9446.378802184827,
+        "shares_after": 0,
+        "note": "双均线趋势：死叉卖出"
+      },
+      {
+        "date": "2026-04-08",
+        "action": "买入",
+        "price": 1.4332,
+        "shares_delta": 6591.109965241994,
+        "cash_after": 0,
+        "shares_after": 6591.109965241994,
+        "note": "双均线趋势：金叉买入"
+      }
+    ]
+  }
+}

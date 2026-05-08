@@ -1,0 +1,17 @@
+﻿date,action,value,title,reason,strategy_type,strategy_name
+2025-08-06,sell,1.3976,死叉卖出,MA5 下穿 MA20,trend_sma,双均线趋势
+2025-08-08,buy,1.4147,金叉买入,MA5 上穿 MA20,trend_sma,双均线趋势
+2025-08-22,sell,1.4063,死叉卖出,MA5 下穿 MA20,trend_sma,双均线趋势
+2025-08-28,buy,1.4136,金叉买入,MA5 上穿 MA20,trend_sma,双均线趋势
+2025-08-29,sell,1.3959,死叉卖出,MA5 下穿 MA20,trend_sma,双均线趋势
+2025-09-09,buy,1.4207,金叉买入,MA5 上穿 MA20,trend_sma,双均线趋势
+2025-11-11,sell,1.5148,死叉卖出,MA5 下穿 MA20,trend_sma,双均线趋势
+2025-11-28,buy,1.5069,金叉买入,MA5 上穿 MA20,trend_sma,双均线趋势
+2025-12-17,sell,1.4556,死叉卖出,MA5 下穿 MA20,trend_sma,双均线趋势
+2025-12-25,buy,1.5123,金叉买入,MA5 上穿 MA20,trend_sma,双均线趋势
+2026-01-05,sell,1.4938,死叉卖出,MA5 下穿 MA20,trend_sma,双均线趋势
+2026-01-09,buy,1.513,金叉买入,MA5 上穿 MA20,trend_sma,双均线趋势
+2026-01-19,sell,1.4973,死叉卖出,MA5 下穿 MA20,trend_sma,双均线趋势
+2026-01-27,buy,1.5175,金叉买入,MA5 上穿 MA20,trend_sma,双均线趋势
+2026-02-04,sell,1.4505,死叉卖出,MA5 下穿 MA20,trend_sma,双均线趋势
+2026-04-08,buy,1.4332,金叉买入,MA5 上穿 MA20,trend_sma,双均线趋势

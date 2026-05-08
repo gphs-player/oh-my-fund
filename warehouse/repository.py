@@ -5,7 +5,7 @@ import os
 import time
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from .cache import FundCache
+from .cache import FundCache, FundHistoryCache
 from .adapters.factory import create_datasource
 from .adapters.base import BaseDataSource
 
@@ -20,11 +20,46 @@ class FundRepository:
     def __init__(self):
         self._ensure_data_dir()
         self.cache = FundCache()
+        self.history_cache = FundHistoryCache()
+        # Default 数据源作为兜底（始终可用）
+        self.default_datasource = create_datasource("Default", {})
         self.datasource = self._load_active_datasource()
         # 实时估值：仅内存缓存（默认 60 秒）
         self._gz_cache: dict[str, dict] = {}
         self._gz_cache_ttl_seconds: int = 60
         self._gz_max_workers: int = 8
+
+    @staticmethod
+    def _get_datasource_type(ds: BaseDataSource | None) -> str:
+        if ds is None:
+            return ""
+        return str(getattr(ds, "source_type", "") or "")
+
+    def _call_with_default_fallback(self, op_name: str, primary_fn, default_fn):
+        """
+        主数据源失败（抛异常）时，使用 Default 数据源兜底重试。
+
+        约定：
+        - 仅当主数据源抛异常才触发兜底（空结果不兜底）
+        - 当没有激活数据源时，直接使用 Default
+        """
+        primary = self.datasource
+        if primary is None:
+            return default_fn()
+
+        primary_type = self._get_datasource_type(primary)
+        if primary_type == "Default":
+            return default_fn()
+
+        try:
+            return primary_fn()
+        except Exception as primary_exc:
+            try:
+                return default_fn()
+            except Exception as default_exc:
+                raise RuntimeError(
+                    f"{op_name}失败：主数据源({primary_type})异常: {primary_exc}；Default重试异常: {default_exc}"
+                ) from default_exc
 
     def _ensure_data_dir(self):
         """确保数据目录存在"""
@@ -73,15 +108,17 @@ class FundRepository:
         # 1. 查缓存
         data = self.cache.get(expire_days)
         if data is not None:
-            return data
+            return self._normalize_fund_list_items(data)
 
-        # 2. 无缓存或已过期 → 调远程
-        if self.datasource is None:
-            return []
-
-        data = self.datasource.get_fund_list()
+        # 2. 无缓存或已过期 → 调数据源（主失败则 Default 兜底）
+        data = self._call_with_default_fallback(
+            "获取基金列表",
+            primary_fn=lambda: self.datasource.get_fund_list(),  # type: ignore[union-attr]
+            default_fn=lambda: self.default_datasource.get_fund_list(),
+        )
 
         # 3. 写入缓存
+        data = self._normalize_fund_list_items(data)
         self.cache.set(data)
         return data
 
@@ -94,12 +131,36 @@ class FundRepository:
         """
         self.cache.clear()
 
-        if self.datasource is None:
-            return []
-
-        data = self.datasource.get_fund_list()
+        data = self._call_with_default_fallback(
+            "刷新基金列表",
+            primary_fn=lambda: self.datasource.get_fund_list(),  # type: ignore[union-attr]
+            default_fn=lambda: self.default_datasource.get_fund_list(),
+        )
+        data = self._normalize_fund_list_items(data)
         self.cache.set(data)
         return data
+
+    @staticmethod
+    def _normalize_fund_list_items(items: list[dict] | None) -> list[dict]:
+        """统一基金列表输出字段，避免缓存写入出现多余字段或缺字段。"""
+        normalized: list[dict] = []
+        for raw in items or []:
+            if not isinstance(raw, dict):
+                continue
+            normalized.append({
+                "fund_code": str(raw.get("fund_code") or "").strip(),
+                "fund_name": str(raw.get("fund_name") or "").strip(),
+                "fund_type": str(raw.get("fund_type") or "").strip(),
+                # 新增：日涨跌幅（RZDF 映射）
+                "percentage": raw.get("percentage"),
+                # 额外字段（mob 数据源映射；Default 下通常为空/None）
+                "fsrq": str(raw.get("fsrq") or "").strip(),
+                "gpsj": raw.get("gpsj"),
+                "dwjz": raw.get("dwjz"),
+                "ljjz": raw.get("ljjz"),
+                "sgzt": str(raw.get("sgzt") or "").strip(),
+            })
+        return normalized
 
     def get_fund_overview(self, fund_code: str) -> dict[str, str]:
         """
@@ -111,17 +172,43 @@ class FundRepository:
         Returns:
             原始键值表
         """
-        if self.datasource is None:
-            raise RuntimeError("当前没有激活的数据源")
-
-        return self.datasource.get_fund_overview(fund_code)
+        return self._call_with_default_fallback(
+            "获取基金概况",
+            primary_fn=lambda: self.datasource.get_fund_overview(fund_code),  # type: ignore[union-attr]
+            default_fn=lambda: self.default_datasource.get_fund_overview(fund_code),
+        )
 
 
     def get_fund_history(self, fund_code: str, start_date: str | None = None, end_date: str | None = None) -> list[dict]:
         """获取基金历史净值序列。"""
-        if self.datasource is None:
-            raise RuntimeError("当前没有激活的数据源")
-        return self.datasource.get_fund_history(fund_code, start_date, end_date)
+        code = str(fund_code or "").strip()
+        if not re.fullmatch(r"\d{5,8}", code):
+            raise ValueError("基金代码格式错误（需 5-8 位数字）")
+
+        full_history = self.history_cache.get(code)
+        if full_history is None:
+            full_history = self._call_with_default_fallback(
+                "获取基金历史净值",
+                primary_fn=lambda: self.datasource.get_fund_history(code),  # type: ignore[union-attr]
+                default_fn=lambda: self.default_datasource.get_fund_history(code),
+            )
+            self.history_cache.set(code, full_history)
+
+        return self._filter_history_by_date(full_history, start_date, end_date)
+
+    @staticmethod
+    def _filter_history_by_date(items: list[dict], start_date: str | None = None, end_date: str | None = None) -> list[dict]:
+        filtered = []
+        for item in items or []:
+            item_date = str(item.get("date") or "").strip()
+            if not item_date:
+                continue
+            if start_date and item_date < start_date:
+                continue
+            if end_date and item_date > end_date:
+                continue
+            filtered.append(item)
+        return filtered
 
     def get_cache_info(self) -> dict:
         """
@@ -135,6 +222,22 @@ class FundRepository:
     def reload_datasource(self):
         """重新加载数据源（配置变更后调用）"""
         self.datasource = self._load_active_datasource()
+
+    def clear_local_caches(self):
+        """清空本地缓存（基金列表缓存 + 历史净值缓存 + 实时估值内存缓存）。"""
+        try:
+            self.cache.clear()
+        except Exception:
+            pass
+        try:
+            self.history_cache.clear_all()
+        except Exception:
+            pass
+        # 实时估值缓存仅内存
+        try:
+            self._gz_cache = {}
+        except Exception:
+            pass
 
     # =====================
     # 实时估值 / 涨跌幅
@@ -155,10 +258,11 @@ class FundRepository:
         if cached and (now - float(cached.get("ts", 0))) <= self._gz_cache_ttl_seconds:
             return cached.get("data") or {"fund_code": code, "percentage": None, "gztime": None, "gz_time": None}
 
-        if self.datasource is None:
-            raise RuntimeError("当前没有激活的数据源")
-
-        data = self.datasource.get_fund_gz(code)
+        data = self._call_with_default_fallback(
+            "获取实时估值",
+            primary_fn=lambda: self.datasource.get_fund_gz(code),  # type: ignore[union-attr]
+            default_fn=lambda: self.default_datasource.get_fund_gz(code),
+        )
         normalized = {
             "fund_code": data.get("fund_code", code),
             "percentage": data.get("percentage"),
@@ -178,8 +282,9 @@ class FundRepository:
               {"fund_code": "...", "percentage": None, "gztime": None, "error": "..."},
             ]
         """
-        if self.datasource is None:
-            raise RuntimeError("当前没有激活的数据源")
+        primary = self.datasource or self.default_datasource
+        primary_type = self._get_datasource_type(primary)
+        default_type = self._get_datasource_type(self.default_datasource)
 
         codes_in = [str(x or "").strip() for x in (fund_codes or [])]
         # 保持输入顺序 + 去重
@@ -213,7 +318,7 @@ class FundRepository:
 
         if pending:
             with ThreadPoolExecutor(max_workers=self._gz_max_workers) as executor:
-                future_map = {executor.submit(self.datasource.get_fund_gz, code): code for code in pending}
+                future_map = {executor.submit(primary.get_fund_gz, code): code for code in pending}
                 for future in as_completed(future_map):
                     code = future_map[future]
                     try:
@@ -227,13 +332,35 @@ class FundRepository:
                         items_by_code[code] = normalized
                         self._gz_cache[code] = {"ts": time.time(), "data": normalized}
                     except Exception as exc:
-                        items_by_code[code] = {
-                            "fund_code": code,
-                            "percentage": None,
-                            "gztime": None,
-                            "gz_time": None,
-                            "error": str(exc),
-                        }
+                        # 主数据源失败时，尝试 Default 兜底（若主本身就是 Default，则不重复）
+                        if primary_type and default_type and primary_type != default_type:
+                            try:
+                                data = self.default_datasource.get_fund_gz(code)
+                                normalized = {
+                                    "fund_code": data.get("fund_code", code),
+                                    "percentage": data.get("percentage"),
+                                    "gztime": data.get("gztime"),
+                                    "gz_time": data.get("gz_time"),
+                                }
+                                items_by_code[code] = normalized
+                                self._gz_cache[code] = {"ts": time.time(), "data": normalized}
+                                continue
+                            except Exception as default_exc:
+                                items_by_code[code] = {
+                                    "fund_code": code,
+                                    "percentage": None,
+                                    "gztime": None,
+                                    "gz_time": None,
+                                    "error": f"主数据源异常: {exc}；Default重试异常: {default_exc}",
+                                }
+                        else:
+                            items_by_code[code] = {
+                                "fund_code": code,
+                                "percentage": None,
+                                "gztime": None,
+                                "gz_time": None,
+                                "error": str(exc),
+                            }
 
         # 按输入 codes 顺序输出
         return [items_by_code.get(code, {"fund_code": code, "percentage": None, "gztime": None, "gz_time": None}) for code in codes]

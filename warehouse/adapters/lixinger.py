@@ -18,7 +18,7 @@ class LixingerDataSource(BaseDataSource):
         self.token = config.get("token", "")
         # TODO: 初始化理杏仁客户端
 
-    def get_fund_list(self) -> list[dict]:
+    def get_fund_list(self, page_num: int | None = None, page_size: int | None = None) -> list[dict]:
         """
         获取基金列表
 

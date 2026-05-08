@@ -20,7 +20,7 @@ class TushareDataSource(BaseDataSource):
         self.password = config.get("password", "")
         # TODO: 初始化 Tushare 客户端
 
-    def get_fund_list(self) -> list[dict]:
+    def get_fund_list(self, page_num: int | None = None, page_size: int | None = None) -> list[dict]:
         """
         获取基金列表
 

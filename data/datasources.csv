@@ -1,4 +1,3 @@
 id,name,type,config,is_active
-1,tttt,lixinger,"{""token"": ""123123""}",false
-2,aaaa,tushare,"{""username"": ""aa"", ""password"": ""bbbb""}",false
-3,默认数据源,Default,{},true
+3,默认数据源,Default,{},false
+4,东财API,EastMoneyMob,{},true

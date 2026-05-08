@@ -342,6 +342,10 @@ const SettingsManager = {
             if (result.success) {
                 showToast('激活成功', 'success');
                 await this.loadDatasources();
+                // 通知基金市场模块：数据源已切换，需要重新拉取类型与列表
+                if (window.FundSelector && typeof window.FundSelector.onDatasourceChanged === 'function') {
+                    await window.FundSelector.onDatasourceChanged();
+                }
             } else {
                 showToast(result.error || '激活失败', 'error');
             }
@@ -358,6 +362,10 @@ const SettingsManager = {
             if (result.success) {
                 showToast('已停用', 'success');
                 await this.loadDatasources();
+                // 通知基金市场模块：数据源已切换，需要重新拉取类型与列表
+                if (window.FundSelector && typeof window.FundSelector.onDatasourceChanged === 'function') {
+                    await window.FundSelector.onDatasourceChanged();
+                }
             } else {
                 showToast(result.error || '停用失败', 'error');
             }

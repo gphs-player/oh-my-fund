@@ -10,7 +10,18 @@ class FundCache:
 
     CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
     CACHE_PREFIX = "funds_list_cache_"
-    CACHE_FIELDS = ["fund_code", "fund_name", "fund_type"]
+    # 兼容：历史缓存文件可能仅包含 fund_code/fund_name，或不包含新增字段
+    CACHE_FIELDS = [
+        "fund_code",
+        "fund_name",
+        "fund_type",
+        "percentage",
+        "fsrq",
+        "gpsj",
+        "dwjz",
+        "ljjz",
+        "sgzt",
+    ]
 
     _memory_cache: list[dict] = None
 
@@ -122,6 +133,13 @@ class FundCache:
                     "fund_name": row.get("fund_name", ""),
                     # 兼容旧缓存文件仅包含 code/name 两列的情况
                     "fund_type": row.get("fund_type", "") or "",
+                    # 新增字段：兼容旧缓存缺列的情况
+                    "percentage": self._parse_float(row.get("percentage")),
+                    "fsrq": row.get("fsrq", "") or "",
+                    "gpsj": self._parse_float(row.get("gpsj")),
+                    "dwjz": self._parse_float(row.get("dwjz")),
+                    "ljjz": self._parse_float(row.get("ljjz")),
+                    "sgzt": row.get("sgzt", "") or "",
                 })
             return data
 
@@ -131,3 +149,131 @@ class FundCache:
             writer = csv.DictWriter(f, fieldnames=self.CACHE_FIELDS)
             writer.writeheader()
             writer.writerows(data)
+
+    @staticmethod
+    def _parse_float(value: str | None) -> float | None:
+        if value is None:
+            return None
+        text = str(value).strip()
+        if text == "" or text == "--":
+            return None
+        try:
+            return float(text)
+        except (TypeError, ValueError):
+            return None
+
+
+class FundHistoryCache:
+    """基金历史净值缓存：内存 + CSV，仅当天有效"""
+
+    CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+    CACHE_PREFIX = "fund_history_cache_"
+    CACHE_FIELDS = ["date", "unit_nav", "cumulative_nav", "daily_return"]
+
+    _memory_cache: dict[str, dict] = {}
+
+    def __init__(self):
+        if not os.path.exists(self.CACHE_DIR):
+            os.makedirs(self.CACHE_DIR)
+
+    def _build_pattern(self, fund_code: str) -> str:
+        return os.path.join(self.CACHE_DIR, f"{self.CACHE_PREFIX}{fund_code}_*.csv")
+
+    def _get_cache_files(self, fund_code: str) -> list[str]:
+        return sorted(glob(self._build_pattern(fund_code)))
+
+    def _get_cache_file(self, fund_code: str) -> str | None:
+        files = self._get_cache_files(fund_code)
+        return files[-1] if files else None
+
+    def _parse_cache_date(self, filepath: str) -> datetime:
+        filename = os.path.basename(filepath)
+        date_str = filename.replace(".csv", "").rsplit("_", 3)[-3:]
+        return datetime.strptime("_".join(date_str), "%Y_%m_%d")
+
+    def _is_today(self, filepath: str) -> bool:
+        cache_date = self._parse_cache_date(filepath).date()
+        return cache_date == datetime.now().date()
+
+    def _clear_memory(self, fund_code: str):
+        FundHistoryCache._memory_cache.pop(fund_code, None)
+
+    def get(self, fund_code: str) -> list[dict] | None:
+        memory_item = FundHistoryCache._memory_cache.get(fund_code)
+        if memory_item and memory_item.get("date") == datetime.now().date().isoformat():
+            return memory_item.get("data")
+        if memory_item:
+            self._clear_memory(fund_code)
+
+        cache_file = self._get_cache_file(fund_code)
+        if cache_file is None:
+            return None
+
+        if not self._is_today(cache_file):
+            self.clear(fund_code)
+            return None
+
+        data = self._read_csv(cache_file)
+        FundHistoryCache._memory_cache[fund_code] = {
+            "date": datetime.now().date().isoformat(),
+            "data": data,
+        }
+        return data
+
+    def set(self, fund_code: str, data: list[dict]):
+        self.clear(fund_code)
+        date_str = datetime.now().strftime("%Y_%m_%d")
+        filepath = os.path.join(self.CACHE_DIR, f"{self.CACHE_PREFIX}{fund_code}_{date_str}.csv")
+        self._write_csv(filepath, data)
+        FundHistoryCache._memory_cache[fund_code] = {
+            "date": datetime.now().date().isoformat(),
+            "data": data,
+        }
+
+    def clear(self, fund_code: str):
+        self._clear_memory(fund_code)
+        for filepath in self._get_cache_files(fund_code):
+            if os.path.exists(filepath):
+                os.remove(filepath)
+
+    def clear_all(self):
+        """清空所有基金历史净值缓存（内存 + CSV）。"""
+        FundHistoryCache._memory_cache = {}
+        pattern = os.path.join(self.CACHE_DIR, f"{self.CACHE_PREFIX}*_*.csv")
+        for filepath in glob(pattern):
+            if os.path.exists(filepath):
+                os.remove(filepath)
+
+    def _read_csv(self, filepath: str) -> list[dict]:
+        with open(filepath, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            data = []
+            for row in reader:
+                data.append({
+                    "date": row.get("date", ""),
+                    "unit_nav": self._parse_float(row.get("unit_nav")),
+                    "cumulative_nav": self._parse_float(row.get("cumulative_nav")),
+                    "daily_return": self._parse_float(row.get("daily_return")),
+                })
+            return data
+
+    def _write_csv(self, filepath: str, data: list[dict]):
+        with open(filepath, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=self.CACHE_FIELDS)
+            writer.writeheader()
+            for item in data:
+                writer.writerow({
+                    "date": item.get("date", ""),
+                    "unit_nav": item.get("unit_nav"),
+                    "cumulative_nav": item.get("cumulative_nav"),
+                    "daily_return": item.get("daily_return"),
+                })
+
+    @staticmethod
+    def _parse_float(value: str | None) -> float | None:
+        if value is None or str(value).strip() == "":
+            return None
+        try:
+            return float(str(value))
+        except (TypeError, ValueError):
+            return None

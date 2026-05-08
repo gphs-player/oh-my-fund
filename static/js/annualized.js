@@ -1,4 +1,16 @@
 const AnnualizedCalculator = {
+    applyUpDownColor: function(el, valuePercent) {
+        if (!el) return;
+        const num = Number(valuePercent);
+        el.classList.remove('text-rose-300', 'text-emerald-300', 'text-slate-200');
+        if (!Number.isFinite(num)) {
+            el.classList.add('text-slate-200');
+            return;
+        }
+        // 红赚绿亏
+        el.classList.add(num >= 0 ? 'text-rose-300' : 'text-emerald-300');
+    },
+
     // 方式一：根据持有周期和总收益率计算
     calculateMethod1: function(event) {
         event.preventDefault();
@@ -10,7 +22,11 @@ const AnnualizedCalculator = {
         const annualReturn = Math.pow(1 + totalReturn, 1 / years) - 1;
         const annualReturnPercent = (annualReturn * 100).toFixed(2);
 
-        document.getElementById('result1-value').textContent = annualReturnPercent + '%';
+        const el = document.getElementById('result1-value');
+        if (el) {
+            el.textContent = annualReturnPercent + '%';
+            this.applyUpDownColor(el, annualReturnPercent);
+        }
         document.getElementById('result1').classList.remove('hidden');
     },
 
@@ -35,8 +51,16 @@ const AnnualizedCalculator = {
         const annualReturn = Math.pow(1 + totalReturn, 1 / years) - 1;
         const annualReturnPercent = (annualReturn * 100).toFixed(2);
 
-        document.getElementById('result2-total').textContent = totalReturnPercent + '%';
-        document.getElementById('result2-annual').textContent = annualReturnPercent + '%';
+        const totalEl = document.getElementById('result2-total');
+        const annualEl = document.getElementById('result2-annual');
+        if (totalEl) {
+            totalEl.textContent = totalReturnPercent + '%';
+            this.applyUpDownColor(totalEl, totalReturnPercent);
+        }
+        if (annualEl) {
+            annualEl.textContent = annualReturnPercent + '%';
+            this.applyUpDownColor(annualEl, annualReturnPercent);
+        }
         document.getElementById('result2').classList.remove('hidden');
     }
 };

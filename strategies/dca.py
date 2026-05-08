@@ -17,7 +17,7 @@ class DcaStrategy(BaseStrategy):
             {"value": "biweekly", "label": "双周"},
             {"value": "monthly", "label": "每月"},
         ]},
-        {"key": "amount", "label": "每次金额", "type": "float", "default": 1000, "min": 0, "description": "仅用于说明，不参与收益计算。"},
+        {"key": "amount", "label": "每次金额", "type": "float", "default": 1000, "min": 0, "description": "用于回测每次投入金额（现金不足则按剩余现金投入）。"},
     ]
     defaults = {"period": "monthly", "amount": 1000}
 

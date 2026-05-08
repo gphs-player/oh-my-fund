@@ -29,7 +29,7 @@ class DefaultDataSource(BaseDataSource):
         "Referer": "https://fund.eastmoney.com/",
     }
 
-    def get_fund_list(self) -> list[dict]:
+    def get_fund_list(self, page_num: int | None = None, page_size: int | None = None) -> list[dict]:
         response_text = self._fetch_fund_list_response()
         return self._parse_fund_list_response(response_text)
 
@@ -45,7 +45,7 @@ class DefaultDataSource(BaseDataSource):
         page = 1
         total_pages = 1
         while page <= total_pages:
-            text = self._fetch_fund_history_response(code, page, start_date, end_date)
+            text = self._fetch_fund_history_response(code, page)
             page_rows, total_pages = self._parse_fund_history_response(text)
             rows.extend(page_rows)
             page += 1
@@ -73,17 +73,13 @@ class DefaultDataSource(BaseDataSource):
         except TimeoutError as exc:
             raise RuntimeError("东方财富基金列表接口请求超时") from exc
 
-    def _fetch_fund_history_response(self, fund_code: str, page: int, start_date: str | None, end_date: str | None) -> str:
+    def _fetch_fund_history_response(self, fund_code: str, page: int) -> str:
         params = [
             f"type=lsjz",
             f"code={fund_code}",
             f"page={page}",
             "per=49",
         ]
-        if start_date:
-            params.append(f"sdate={start_date}")
-        if end_date:
-            params.append(f"edate={end_date}")
         url = f"{self.EASTMONEY_FUND_HISTORY_URL}?{'&'.join(params)}"
         req = request.Request(url, headers=self.REQUEST_HEADERS)
         try:

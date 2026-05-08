@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 
@@ -132,9 +133,18 @@ def build_signal(
     strategy_type: str,
     strategy_name: str,
 ) -> dict[str, Any]:
+    raw_uid = "|".join([
+        str(strategy_type or "").strip(),
+        str(date or "").strip(),
+        str(action or "").strip(),
+        str(title or "").strip(),
+    ])
+    signal_uid = hashlib.md5(raw_uid.encode("utf-8")).hexdigest()[:16]
     return {
+        "signal_uid": signal_uid,
         "date": date,
         "value": value,
+        "price_ref": value,
         "action": action,
         "title": title,
         "reason": reason,

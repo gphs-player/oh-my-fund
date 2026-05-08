@@ -18,12 +18,13 @@ class BaseDataSource:
 
     def test_connection(self) -> dict:
         try:
-            result = self.get_fund_list()
+            # 只测试第一页少量数据，避免全量拉取导致慢/超时
+            result = self.get_fund_list(page_num=1, page_size=5)
             return {"success": True, "message": "连接成功", "count": len(result)}
         except Exception as e:
             return {"success": False, "message": str(e), "count": 0}
 
-    def get_fund_list(self) -> list[dict]:
+    def get_fund_list(self, page_num: int | None = None, page_size: int | None = None) -> list[dict]:
         raise NotImplementedError("子类必须实现 get_fund_list 方法")
 
     def get_fund_overview(self, fund_code: str) -> dict[str, str]:

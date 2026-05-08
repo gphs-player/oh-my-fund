@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime, date, timedelta
 
 from strategies import registry as strategy_registry
+from strategies.backtest import run_backtest
 from warehouse import FundRepository
 from warehouse.adapters import create_datasource, get_available_types
 
@@ -96,13 +97,19 @@ def save_markets():
 # =====================
 @app.route('/api/strategy-types', methods=['GET'])
 def list_strategy_types():
-    """获取动态注册的策略类型。"""
-    return jsonify(get_builtin_strategy_types())
+    """获取动态注册的单一策略定义。"""
+    data = []
+    for item in get_builtin_strategy_types():
+        normalized = dict(item or {})
+        normalized['strategy_kind'] = 'single'
+        normalized['is_builtin'] = True
+        data.append(normalized)
+    return jsonify(data)
 
 
 @app.route('/api/strategies', methods=['GET'])
 def list_strategies():
-    """获取策略方案列表（轻量）。"""
+    """获取组合策略列表（轻量）。"""
     strategies = read_strategies()
     data = []
     for item in strategies:
@@ -115,6 +122,7 @@ def list_strategies():
             'scope': item.get('scope', 'single_fund_analysis'),
             'fund_code': item.get('fund_code', ''),
             'fund_name': item.get('fund_name', ''),
+            'strategy_kind': 'composite',
             'strategy_count': len(stack),
             'created_at': item.get('created_at', ''),
             'updated_at': item.get('updated_at', ''),
@@ -125,7 +133,7 @@ def list_strategies():
 
 @app.route('/api/strategies', methods=['POST'])
 def create_strategy():
-    """新建策略方案。"""
+    """新建组合策略。"""
     data = request.get_json() or {}
     try:
         plan = build_strategy_plan_payload(data)
@@ -137,12 +145,15 @@ def create_strategy():
         'strategy_id': strategy_id,
         'name': plan['name'],
         'type': 'strategy_plan',
+        'strategy_kind': 'composite',
         'version': 1,
         'scope': plan['scope'],
         'fund_code': plan['fund_code'],
         'fund_name': plan['fund_name'],
         'date_range': plan['date_range'],
         'stack': plan['stack'],
+        'backtest_config': plan.get('backtest_config') or {},
+        'signal_overrides': plan.get('signal_overrides') or [],
         'created_at': now,
         'updated_at': now,
     }
@@ -155,7 +166,7 @@ def create_strategy():
 
 @app.route('/api/strategies/<strategy_id>', methods=['GET'])
 def get_strategy(strategy_id):
-    """获取单条策略方案详情。"""
+    """获取单条组合策略详情。"""
     strategies = read_strategies()
     item = next((x for x in strategies if x.get('strategy_id') == strategy_id), None)
     if not item:
@@ -165,7 +176,7 @@ def get_strategy(strategy_id):
 
 @app.route('/api/strategies/<strategy_id>', methods=['PUT'])
 def update_strategy(strategy_id):
-    """覆盖更新策略方案。"""
+    """覆盖更新组合策略。"""
     data = request.get_json() or {}
     try:
         plan = build_strategy_plan_payload(data)
@@ -184,6 +195,8 @@ def update_strategy(strategy_id):
             item['fund_name'] = plan['fund_name']
             item['date_range'] = plan['date_range']
             item['stack'] = plan['stack']
+            item['backtest_config'] = plan.get('backtest_config') or {}
+            item['signal_overrides'] = plan.get('signal_overrides') or []
             item['updated_at'] = _now_iso()
             found = True
             break
@@ -197,7 +210,7 @@ def update_strategy(strategy_id):
 
 @app.route('/api/strategies/<strategy_id>', methods=['DELETE'])
 def delete_strategy(strategy_id):
-    """删除策略方案。"""
+    """删除组合策略。"""
     strategies = read_strategies()
     new_items = [x for x in strategies if x.get('strategy_id') != strategy_id]
     if len(new_items) == len(strategies):
@@ -253,6 +266,71 @@ def run_strategy_analysis():
             'strategy_count': len(strategy_results),
             'signal_count': len(all_signals),
         },
+    })
+
+
+@app.route('/api/strategy-run', methods=['POST'])
+def run_strategy_and_backtest():
+    """执行单基金策略分析 + 回测（统一接口）。"""
+    data = request.get_json() or {}
+    fund_code = str(data.get('fund_code', '')).strip()
+    if not fund_code:
+        return jsonify({'success': False, 'message': '基金代码不能为空'}), 400
+
+    date_range = normalize_strategy_date_range(data.get('date_range'))
+    full_history = bool(data.get('full_history')) or bool(date_range.get('full_history'))
+    start_date, end_date = resolve_date_range(
+        str(data.get('start_date', '')).strip() or date_range.get('start_date') or None,
+        str(data.get('end_date', '')).strip() or date_range.get('end_date') or None,
+        full_history=full_history,
+    )
+    try:
+        stack = strategy_registry.validate_stack(data.get('stack') or [])
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 400
+
+    active_stack = [item for item in stack if item.get('enabled', True)]
+    if not active_stack:
+        return jsonify({'success': False, 'message': '请至少启用一个策略'}), 400
+
+    backtest_config = data.get('backtest_config') if isinstance(data.get('backtest_config'), dict) else {}
+    signal_overrides = data.get('signal_overrides') if isinstance(data.get('signal_overrides'), list) else []
+
+    try:
+        history = fund_repository.get_fund_history(fund_code, start_date, end_date)
+        strategy_results = strategy_registry.run_stack(history, active_stack)
+    except Exception as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 400
+
+    all_signals: list[dict] = []
+    for item in strategy_results:
+        all_signals.extend(item.get('signals') or [])
+    all_signals.sort(key=lambda x: (x.get('date') or '', x.get('strategy_name') or '', x.get('title') or ''))
+
+    try:
+        backtest_result, backtest_trades = run_backtest(
+            history=history,
+            signals=all_signals,
+            config=backtest_config,
+            overrides=signal_overrides,
+        )
+    except Exception as exc:
+        backtest_result, backtest_trades = {'error': str(exc)}, []
+
+    return jsonify({
+        'success': True,
+        'fund_code': fund_code,
+        'history': history,
+        'analysis_results': strategy_results,
+        'signals': all_signals,
+        'date_range': {'start_date': start_date, 'end_date': end_date},
+        'summary': {
+            'history_count': len(history),
+            'strategy_count': len(strategy_results),
+            'signal_count': len(all_signals),
+        },
+        'backtest_result': backtest_result,
+        'backtest_trades': backtest_trades,
     })
 
 
@@ -966,6 +1044,8 @@ def write_strategies(items):
                     'fund_name': normalized.get('fund_name', ''),
                     'date_range': normalized.get('date_range', default_strategy_date_range()),
                     'stack': normalized.get('stack', []),
+                    'backtest_config': normalized.get('backtest_config') or {},
+                    'signal_overrides': normalized.get('signal_overrides') or [],
                 }, ensure_ascii=False),
                 normalized.get('created_at', ''),
                 normalized.get('updated_at', ''),
@@ -1036,16 +1116,21 @@ def normalize_strategy_record(item):
     if item_type == 'strategy_plan':
         raw_stack = params.get('stack') if isinstance(params.get('stack'), list) else item.get('stack')
         stack = strategy_registry.validate_stack(raw_stack or [])
+        backtest_config = params.get('backtest_config') if isinstance(params.get('backtest_config'), dict) else item.get('backtest_config')
+        signal_overrides = params.get('signal_overrides') if isinstance(params.get('signal_overrides'), list) else item.get('signal_overrides')
         return {
             'strategy_id': item.get('strategy_id', ''),
             'name': item.get('name', ''),
             'type': 'strategy_plan',
+            'strategy_kind': 'composite',
             'version': 1,
             'scope': params.get('scope') or item.get('scope') or 'single_fund_analysis',
             'fund_code': str(params.get('fund_code') or item.get('fund_code') or '').strip(),
             'fund_name': str(params.get('fund_name') or item.get('fund_name') or '').strip(),
             'date_range': normalize_strategy_date_range(params.get('date_range') if isinstance(params.get('date_range'), dict) else item.get('date_range')),
             'stack': stack,
+            'backtest_config': backtest_config if isinstance(backtest_config, dict) else {},
+            'signal_overrides': signal_overrides if isinstance(signal_overrides, list) else [],
             'created_at': item.get('created_at', ''),
             'updated_at': item.get('updated_at', ''),
         }
@@ -1071,6 +1156,8 @@ def normalize_strategy_record(item):
         'fund_name': '',
         'date_range': normalize_strategy_date_range(None),
         'stack': stack,
+        'backtest_config': {},
+        'signal_overrides': [],
         'created_at': item.get('created_at', ''),
         'updated_at': item.get('updated_at', ''),
     }
@@ -1092,6 +1179,8 @@ def build_strategy_plan_payload(data):
 
     fund_code = str(data.get('fund_code') or '').strip()
     fund_name = str(data.get('fund_name') or '').strip()
+    backtest_config = data.get('backtest_config') if isinstance(data.get('backtest_config'), dict) else {}
+    signal_overrides = data.get('signal_overrides') if isinstance(data.get('signal_overrides'), list) else []
 
     return {
         'name': name,
@@ -1100,6 +1189,8 @@ def build_strategy_plan_payload(data):
         'fund_name': fund_name,
         'date_range': normalize_strategy_date_range(data.get('date_range')),
         'stack': normalized_stack,
+        'backtest_config': backtest_config,
+        'signal_overrides': signal_overrides,
     }
 
 
@@ -1231,6 +1322,11 @@ def activate_datasource(ds_id):
     
     write_datasources(datasources)
     fund_repository.reload_datasource()
+    # 数据源切换后，强制清空本地缓存，避免继续返回旧数据
+    try:
+        fund_repository.clear_local_caches()
+    except Exception:
+        pass
     return jsonify({'success': True})
 
 
@@ -1251,6 +1347,11 @@ def deactivate_datasource(ds_id):
     
     write_datasources(datasources)
     fund_repository.reload_datasource()
+    # 停用后同样清空本地缓存，避免继续展示旧数据
+    try:
+        fund_repository.clear_local_caches()
+    except Exception:
+        pass
     return jsonify({'success': True})
 
 
@@ -1263,8 +1364,12 @@ def test_datasource(ds_id):
         if ds['id'] == ds_id:
             try:
                 source = create_datasource(ds['type'], ds['config'])
-                result = source.test_connection()
-                return jsonify(result)
+                # 只测试第一页少量数据，避免全量拉取导致慢/超时
+                if hasattr(source, 'get_fund_list_page'):
+                    items, _total = source.get_fund_list_page(page_num=1, page_size=5)
+                else:
+                    items = source.get_fund_list(page_num=1, page_size=5)
+                return jsonify({"success": True, "message": "连接成功", "count": len(items)})
             except Exception as e:
                 return jsonify({'success': False, 'message': str(e), 'count': 0})
     
@@ -1320,14 +1425,145 @@ def refresh_cache():
 # 基金数据 API
 # =====================
 
+FUND_TYPE_OPTIONS_EASTMONEY = [
+    {"fund_type_code": "0", "fund_type_name": "全部"},
+    {"fund_type_code": "25", "fund_type_name": "股票型"},
+    {"fund_type_code": "27", "fund_type_name": "混合型"},
+    {"fund_type_code": "26", "fund_type_name": "指数型"},
+    {"fund_type_code": "31", "fund_type_name": "债券型"},
+    {"fund_type_code": "35", "fund_type_name": "货币型"},
+    {"fund_type_code": "15", "fund_type_name": "FOF"},
+    {"fund_type_code": "6", "fund_type_name": "QDII"},
+    {"fund_type_code": "3", "fund_type_name": "ETF"},
+    {"fund_type_code": "33", "fund_type_name": "ETF联接"},
+    {"fund_type_code": "4", "fund_type_name": "LOF"},
+]
+
+FUND_TYPE_NAME_BY_CODE_EASTMONEY = {x["fund_type_code"]: x["fund_type_name"] for x in FUND_TYPE_OPTIONS_EASTMONEY}
+
+
+@app.route('/api/funds/types', methods=['GET'])
+def get_fund_types():
+    """获取基金类型选项（用于前端下拉筛选）。"""
+    try:
+        active_ds = fund_repository.datasource or fund_repository.default_datasource
+        active_type = getattr(active_ds, 'source_type', '') or ''
+
+        if str(active_type) == 'EastMoneyMob':
+            return jsonify({"success": True, "items": FUND_TYPE_OPTIONS_EASTMONEY})
+
+        # Default/其他：从全量基金列表去重 fund_type（中文）
+        funds = fund_repository.get_fund_list()
+        seen = set()
+        items = [{"fund_type_code": "0", "fund_type_name": "全部"}]
+        for f in funds:
+            name = str(f.get("fund_type", "") or "").strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            items.append({"fund_type_code": name, "fund_type_name": name})
+        return jsonify({"success": True, "items": items})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e), "items": []}), 500
+
+
 @app.route('/api/funds', methods=['GET'])
 def get_funds():
     """获取基金列表"""
     try:
+        # 完全分页：始终返回分页对象
+        page_num_raw = (request.args.get('pageNum') or '').strip()
+        page_size_raw = (request.args.get('pageSize') or '').strip()
+        q = (request.args.get('q') or '').strip()
+        fund_type_code = (request.args.get('fund_type_code') or '').strip() or "0"
+
+        page_num = int(page_num_raw or 1)
+        page_size = int(page_size_raw or 50)
+        if page_num < 1:
+            page_num = 1
+        if page_size < 1:
+            page_size = 1
+        if page_size > 200:
+            page_size = 200
+
+        active_ds = fund_repository.datasource or fund_repository.default_datasource
+        active_type = getattr(active_ds, 'source_type', '') or ''
+
+        # 新东方财富数据源：映射到其分页能力，直接只拉一页（不走全量缓存）
+        if str(active_type) == 'EastMoneyMob':
+            # 优先使用带 total 的分页方法
+            # 解析 FundType 入参
+            try:
+                eastmoney_fund_type = int(fund_type_code or 0)
+            except ValueError:
+                eastmoney_fund_type = 0
+
+            if hasattr(active_ds, 'get_fund_list_page'):
+                items, total = active_ds.get_fund_list_page(page_num=page_num, page_size=page_size, fund_type=eastmoney_fund_type)
+            else:
+                items = active_ds.get_fund_list(page_num=page_num, page_size=page_size)
+                total = len(items)
+
+            # fund_type_code / q 过滤：东财已通过 FundType 在服务端过滤；这里仅做 q 过滤
+            if q:
+                items = [
+                    x for x in (items or [])
+                    if (q in str(x.get('fund_code', '') or '')) or (q in str(x.get('fund_name', '') or ''))
+                ]
+                # q 过滤后的 total 无法精确计算，这里退化为当前页数量
+                total = len(items)
+
+            # 统一输出 fund_type_code/name
+            type_name = FUND_TYPE_NAME_BY_CODE_EASTMONEY.get(str(eastmoney_fund_type), "")
+            normalized_items = []
+            for x in (items or []):
+                row = dict(x)
+                row["fund_type_code"] = str(eastmoney_fund_type)
+                row["fund_type_name"] = type_name
+                # 兼容：若接口返回了 FUNDTYPE 也不影响展示
+                row.pop("fund_type", None)
+                normalized_items.append(row)
+
+            return jsonify({
+                'success': True,
+                'pageNum': page_num,
+                'pageSize': page_size,
+                'total': total,
+                'items': normalized_items,
+            })
+
+        # Default/其他数据源：使用全量缓存数据做后端过滤 + 分页切片
         funds = fund_repository.get_fund_list()
-        return jsonify(funds)
+        filtered = []
+        for f in funds:
+            code = str(f.get('fund_code', '') or '')
+            name = str(f.get('fund_name', '') or '')
+            ftype_name = str(f.get('fund_type', '') or '').strip()
+            # Default 的 fund_type_code 就用中文类型名本身
+            if fund_type_code and fund_type_code != "0" and ftype_name != fund_type_code:
+                continue
+            if q and (q not in code) and (q not in name):
+                continue
+            filtered.append({
+                **f,
+                "fund_type_code": ftype_name,
+                "fund_type_name": ftype_name,
+            })
+
+        total = len(filtered)
+        start = (page_num - 1) * page_size
+        end = start + page_size
+        page_items = filtered[start:end]
+
+        return jsonify({
+            'success': True,
+            'pageNum': page_num,
+            'pageSize': page_size,
+            'total': total,
+            'items': page_items,
+        })
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 
 @app.route('/api/funds/<fund_code>/history', methods=['GET'])
@@ -1458,8 +1694,27 @@ def get_funds_gz():
 def get_fund_overview(fund_code):
     """获取单只基金基本信息"""
     try:
-        data = fund_repository.get_fund_overview(fund_code)
-        return jsonify({'success': True, 'fund_code': fund_code, 'data': data})
+        raw = fund_repository.get_fund_overview(fund_code)
+
+        # 统一输出 items（KV 数组），兼容：
+        # - 新数据源直接返回 items(list)
+        # - 旧数据源返回扁平 dict
+        items = []
+        if isinstance(raw, list):
+            items = raw
+        elif isinstance(raw, dict):
+            for k, v in raw.items():
+                items.append({
+                    "section": "JJXQ",
+                    "section_name": "基金详情",
+                    "key": str(k),
+                    "label": str(k),
+                    "value": "--" if v is None or str(v).strip() == "" else str(v),
+                })
+        else:
+            items = []
+
+        return jsonify({'success': True, 'fund_code': fund_code, 'items': items})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 400
 

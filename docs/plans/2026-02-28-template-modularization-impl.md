@@ -286,7 +286,7 @@ git commit -m "refactor: 提取投资计划 Tab 为独立模板"
 
 ---
 
-### Task 5: 提取多维选基 Tab
+### Task 5: 提取基金市场 Tab
 
 **Files:**
 - Create: `templates/partials/tab-fund-select.html`
@@ -298,7 +298,7 @@ git commit -m "refactor: 提取投资计划 Tab 为独立模板"
 <div id="fund-select-tab" class="tab-content hidden">
     <div class="card bg-base-300/50 backdrop-blur-sm shadow-xl">
         <div class="card-body">
-            <h2 class="card-title gradient-text">多维选基</h2>
+            <h2 class="card-title gradient-text">基金市场</h2>
             <!-- 内容待实现 -->
         </div>
     </div>
@@ -309,7 +309,7 @@ git commit -m "refactor: 提取投资计划 Tab 为独立模板"
 
 ```bash
 git add templates/partials/tab-fund-select.html
-git commit -m "refactor: 提取多维选基 Tab 为独立模板"
+git commit -m "refactor: 提取基金市场 Tab 为独立模板"
 ```
 
 ---
@@ -515,7 +515,7 @@ git commit -m "refactor: 提取复利计算器 Tab 为独立模板"
                 <!-- 右侧：Tab导航 -->
                 <div role="tablist" class="tabs tabs-bordered bg-transparent">
                     <a role="tab" class="tab tab-active" data-tab="investment">投资计划</a>
-                    <a role="tab" class="tab" data-tab="fund-select">多维选基</a>
+                    <a role="tab" class="tab" data-tab="fund-select">基金市场</a>
                     <a role="tab" class="tab" data-tab="annualized">年化计算器</a>
                     <a role="tab" class="tab" data-tab="compound">复利计算器</a>
                 </div>
@@ -595,7 +595,7 @@ git commit -m "refactor: 重构 index.html 使用 Jinja2 include"
 
 访问 http://localhost:5001，依次验证：
 
-1. [ ] Tab 切换正常（投资计划/多维选基/年化计算器/复利计算器）
+1. [ ] Tab 切换正常（投资计划/基金市场/年化计算器/复利计算器）
 2. [ ] 投资计划 Tab：
    - [ ] 添加按钮打开模态框
    - [ ] 模态框表单可填写并保存

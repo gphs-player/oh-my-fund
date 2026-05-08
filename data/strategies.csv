@@ -1,2 +1,1 @@
 strategy_id,name,type,version,params,created_at,updated_at
-91d4a2a034b54c52b36f2aa90be7a82e,B,trend_sma,1,"{""fast_window"": 20, ""slow_window"": 60, ""signal"": ""cross""}",2026-04-20T19:47:41,2026-04-20T19:47:45
