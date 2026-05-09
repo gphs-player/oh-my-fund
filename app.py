@@ -1514,6 +1514,15 @@ def ai_fund_pick_parse_refine():
             lines.append(f"「{metric}」的时间窗口 = {v}")
         elif field == 'value':
             lines.append(f"「{metric}」的阈值/区间 = {v}")
+        elif field == 'limit':
+            # TopN 必须为正整数
+            try:
+                n = int(str(v).strip())
+                if n <= 0 or n > 500:
+                    return jsonify({'success': False, 'message': 'TopN 必须为 1-500 的正整数'}), 400
+            except Exception:
+                return jsonify({'success': False, 'message': 'TopN 必须为正整数'}), 400
+            lines.append(f"TopN = {n}")
         else:
             lines.append(f"「{metric}」补充 {field} = {v}")
     supplement = "；".join(lines) if lines else "（无）"

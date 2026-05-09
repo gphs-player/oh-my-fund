@@ -33,6 +33,9 @@ def build_missing_items(draft: dict) -> list[dict]:
     items: list[dict] = []
     idx = 1
 
+    has_sort = False
+    has_limit_value = False
+
     for i, it in enumerate(intents):
         if not isinstance(it, dict):
             continue
@@ -104,6 +107,28 @@ def build_missing_items(draft: dict) -> list[dict]:
                     }
                 )
                 idx += 1
+            else:
+                has_limit_value = True
+
+        if intent_type == "sort":
+            has_sort = True
+
+    # 规则：只要有 sort，但没有明确 TopN（limit），必须弹框追问
+    if has_sort and not has_limit_value:
+        items.append(
+            {
+                "item_id": f"m{idx}",
+                "intent_index": -1,
+                "metric_name": "TopN",
+                "field": "limit",
+                "evidence": "",
+                "problem": "未指定筛选数量（TopN）",
+                "suggestion": "建议填写 20 / 50 / 100（也可自定义）",
+                "input_type": "text",
+                "options": [],
+                "required": True,
+            }
+        )
 
     return items
 
@@ -119,4 +144,3 @@ def missing_signature(missing_items: list[dict]) -> str:
         keys.append(f"{it.get('metric_name')}::{it.get('field')}::{it.get('intent_index')}")
     keys = sorted(set(keys))
     return "|".join(keys)
-

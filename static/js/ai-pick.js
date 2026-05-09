@@ -208,10 +208,34 @@ const AiFundPick = {
             const textInput = document.createElement('input');
             textInput.type = 'text';
             textInput.className = 'input input-bordered input-sm flex-1 min-w-[220px]';
-            textInput.placeholder = field === 'window' ? '请输入时间窗口（如 1y/3y/成立以来）' : '请输入具体值（如 30 或 10-200）';
+            if (field === 'window') {
+                textInput.placeholder = '请输入时间窗口（如 1y/3y/all 或 近1年/成立以来）';
+            } else if (field === 'limit') {
+                textInput.placeholder = '请输入数量（如 20/50/100）';
+            } else {
+                textInput.placeholder = '请输入具体值（如 30 或 10-200）';
+            }
             textInput.dataset.itemId = itemId;
             textInput.addEventListener('input', () => this._syncRegenerateEnabled());
             inputRow.appendChild(textInput);
+
+            // TopN：提供快捷按钮，但仍允许手输
+            if (field === 'limit') {
+                const quick = document.createElement('div');
+                quick.className = 'flex flex-wrap gap-2';
+                ['20', '50', '100'].forEach(v => {
+                    const b = document.createElement('button');
+                    b.type = 'button';
+                    b.className = 'btn btn-xs btn-outline';
+                    b.textContent = v;
+                    b.addEventListener('click', () => {
+                        textInput.value = v;
+                        this._syncRegenerateEnabled();
+                    });
+                    quick.appendChild(b);
+                });
+                wrap.appendChild(quick);
+            }
 
             wrap.appendChild(inputRow);
             listEl.appendChild(wrap);
@@ -257,6 +281,21 @@ const AiFundPick = {
             const input = row.querySelector('input[data-item-id]');
             const val = String((input && input.value) || '').trim();
             if (!val) ok = false;
+        });
+
+        // TopN 校验：如存在 limit 缺失项，则必须为正整数
+        listEl.querySelectorAll('[data-item-id]').forEach(row => {
+            const input = row.querySelector('input[data-item-id]');
+            if (!input) return;
+            const itemId = String(input.dataset.itemId || '');
+            const items = Array.isArray(this._lastMissingItems) ? this._lastMissingItems : [];
+            const mi = items.find(x => String(x.item_id || '') === itemId);
+            if (!mi) return;
+            if (String(mi.field || '') !== 'limit') return;
+            const raw = String(input.value || '').trim();
+            if (!raw) return;
+            const n = parseInt(raw, 10);
+            if (!Number.isFinite(n) || String(n) !== raw || n <= 0) ok = false;
         });
         regenBtn.disabled = !ok;
     },
@@ -326,4 +365,3 @@ const AiFundPick = {
 document.addEventListener('DOMContentLoaded', function() {
     AiFundPick.init();
 });
-
