@@ -34,6 +34,7 @@ def build_missing_items(draft: dict) -> list[dict]:
     idx = 1
 
     has_sort = False
+    has_soft_preference = False
     has_limit_value = False
 
     for i, it in enumerate(intents):
@@ -112,9 +113,11 @@ def build_missing_items(draft: dict) -> list[dict]:
 
         if intent_type == "sort":
             has_sort = True
+        if intent_type == "soft_preference":
+            has_soft_preference = True
 
     # 规则：只要有 sort，但没有明确 TopN（limit），必须弹框追问
-    if has_sort and not has_limit_value:
+    if (has_sort or has_soft_preference) and not has_limit_value:
         items.append(
             {
                 "item_id": f"m{idx}",
