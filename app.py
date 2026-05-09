@@ -9,6 +9,7 @@ from strategies import registry as strategy_registry
 from strategies.backtest import run_backtest
 from warehouse import FundRepository
 from warehouse.adapters import create_datasource, get_available_types
+from warehouse.ai_fund_pick.parser import FundPickParseError, parse_fund_pick_prompt
 
 app = Flask(__name__)
 
@@ -1398,6 +1399,46 @@ def update_settings():
     settings.update(data)
     write_settings(settings)
     return jsonify({'success': True})
+
+
+# =====================
+# AI 选基（第 1 步：解析提示词为 draft）
+# =====================
+
+@app.route('/api/ai-fund-pick/parse', methods=['POST'])
+def ai_fund_pick_parse_prompt():
+    """将用户筛选提示词解析为 draft JSON（仅解析，不做筛选/不做能力裁剪）。"""
+    data = request.get_json(silent=True) or {}
+    prompt = ""
+    if isinstance(data, dict):
+        prompt = str(data.get('prompt') or '').strip()
+    if not prompt:
+        return jsonify({'success': False, 'message': '提示词不能为空'}), 400
+    if len(prompt) > 2000:
+        return jsonify({'success': False, 'message': '提示词过长（建议不超过 2000 字符）'}), 400
+
+    settings = read_settings()
+    provider = str(settings.get('llm_provider') or '').strip()
+    api_key = str(settings.get('llm_api_key') or '').strip()
+    model = str(settings.get('llm_model') or '').strip()
+    base_url = str(settings.get('llm_base_url') or '').strip()
+
+    if not provider or not api_key:
+        return jsonify({'success': False, 'message': '请先在「设置」页配置 AI 模型（provider/api_key）'}), 400
+
+    try:
+        draft = parse_fund_pick_prompt(prompt, {
+            'provider': provider,
+            'api_key': api_key,
+            'model': model,
+            'base_url': base_url,
+        })
+        return jsonify({'success': True, 'draft': draft})
+    except FundPickParseError as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+    except Exception as e:
+        msg = str(e) or '解析失败'
+        return jsonify({'success': False, 'message': msg[:500]}), 400
 
 
 # =====================
