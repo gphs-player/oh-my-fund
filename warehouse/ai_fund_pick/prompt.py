@@ -117,3 +117,26 @@ def build_user_message(prompt: str) -> str:
 {prompt}
 """.strip()
 
+
+def build_refine_user_message(prompt: str, supplement: str, draft_preview: dict | None = None) -> str:
+    """二次生成草案：在原提示词基础上，追加用户补全边界信息。"""
+    prompt = (prompt or "").strip()
+    supplement = (supplement or "").strip()
+
+    preview_text = ""
+    if isinstance(draft_preview, dict) and draft_preview:
+        # 只提供一个非常简短的上下文，避免模型被旧草案绑死
+        notes = str(draft_preview.get("notes") or "").strip()
+        if notes:
+            preview_text = f"\n\n上一次解析的理解摘要（供参考）：{notes}\n"
+
+    return f"""
+候选集默认全量（universe_default=all）。除非用户明确说明“自选/某类型/关键词搜索”等，否则请使用 universe.mode="all"。
+
+用户筛选提示词如下（原文）：
+{prompt}
+
+用户已补充的边界信息如下（必须纳入本次重新生成的草案）：
+{supplement if supplement else "（无）"}
+{preview_text}
+""".strip()

@@ -9,8 +9,8 @@ from strategies import registry as strategy_registry
 from strategies.backtest import run_backtest
 from warehouse import FundRepository
 from warehouse.adapters import create_datasource, get_available_types
-from warehouse.ai_fund_pick.parser import FundPickParseError, parse_fund_pick_prompt
-from warehouse.ai_fund_pick.clarify import apply_answers, build_questions
+from warehouse.ai_fund_pick.parser import FundPickParseError, parse_fund_pick_prompt, parse_fund_pick_prompt_refine
+from warehouse.ai_fund_pick.missing import build_missing_items, missing_signature
 from warehouse.paths import STORE_DIR, migrate_data_layout_if_needed
 
 app = Flask(__name__)
@@ -1438,15 +1438,17 @@ def ai_fund_pick_parse_prompt():
             'model': model,
             'base_url': base_url,
         })
-        questions = build_questions(draft)
-        if questions:
+        missing_items = build_missing_items(draft)
+        if missing_items:
             return jsonify({
                 'success': True,
                 'need_clarify': True,
-                'questions': questions,
+                'round': 0,
+                'missing_items': missing_items,
+                'missing_signature': missing_signature(missing_items),
                 'draft_preview': draft,
             })
-        return jsonify({'success': True, 'need_clarify': False, 'draft': draft})
+        return jsonify({'success': True, 'need_clarify': False, 'round': 0, 'draft': draft})
     except FundPickParseError as e:
         return jsonify({'success': False, 'message': str(e)}), 400
     except Exception as e:
@@ -1454,38 +1456,105 @@ def ai_fund_pick_parse_prompt():
         return jsonify({'success': False, 'message': msg[:500]}), 400
 
 
-@app.route('/api/ai-fund-pick/parse/confirm', methods=['POST'])
-def ai_fund_pick_parse_confirm():
-    """提交边界补全答案，生成最终 draft（不再二次调用 LLM）。"""
+@app.route('/api/ai-fund-pick/parse/refine', methods=['POST'])
+def ai_fund_pick_parse_refine():
+    """提交边界补全信息后，二次调用 LLM 重新生成草案。"""
     data = request.get_json(silent=True) or {}
     if not isinstance(data, dict):
         return jsonify({'success': False, 'message': '无效请求'}), 400
 
     prompt = str(data.get('prompt') or '').strip()
-    draft = data.get('draft')
-    questions = data.get('questions')
-    answers = data.get('answers')
+    draft_preview = data.get('draft_preview')
+    missing_items = data.get('missing_items')
+    user_fills = data.get('user_fills')
+    round_num = int(data.get('round') or 0)
+    prev_signature = str(data.get('prev_missing_signature') or '').strip()
 
     if not prompt:
         return jsonify({'success': False, 'message': '提示词不能为空'}), 400
-    if not isinstance(draft, dict):
-        return jsonify({'success': False, 'message': 'draft 无效'}), 400
-    if not isinstance(questions, list):
-        return jsonify({'success': False, 'message': 'questions 无效'}), 400
-    if not isinstance(answers, list):
-        return jsonify({'success': False, 'message': 'answers 无效'}), 400
+    if not isinstance(draft_preview, dict):
+        return jsonify({'success': False, 'message': 'draft_preview 无效'}), 400
+    if not isinstance(missing_items, list):
+        return jsonify({'success': False, 'message': 'missing_items 无效'}), 400
+    if not isinstance(user_fills, list):
+        return jsonify({'success': False, 'message': 'user_fills 无效'}), 400
+
+    # 最多 3 轮补全（A 策略：超限失败）
+    if round_num >= 3:
+        return jsonify({'success': False, 'message': '边界仍不明确，已达补全次数上限（3轮），请在提示词中补充关键阈值/时间窗口后再试', 'missing_items': missing_items}), 400
+
+    # 校验 fills：必须覆盖 required 项，且 item_id 必须在 missing_items 中
+    mi_map = {str(x.get('item_id')): x for x in missing_items if isinstance(x, dict) and x.get('item_id')}
+    fills_map = {}
+    for it in user_fills:
+        if not isinstance(it, dict):
+            continue
+        item_id = str(it.get('item_id') or '').strip()
+        if not item_id or item_id not in mi_map:
+            return jsonify({'success': False, 'message': '包含未知的缺失项 item_id'}), 400
+        val = it.get('value')
+        if val is None or str(val).strip() == '':
+            continue
+        fills_map[item_id] = str(val).strip()
+
+    for item_id, mi in mi_map.items():
+        if mi.get('required') and item_id not in fills_map:
+            title = str(mi.get('metric_name') or '') + ':' + str(mi.get('field') or '')
+            return jsonify({'success': False, 'message': f'请先补全必填项：{title}'}), 400
+
+    # 组装补充说明（给 LLM）
+    lines = []
+    for item_id, mi in mi_map.items():
+        v = fills_map.get(item_id, '')
+        if not v:
+            continue
+        metric = str(mi.get('metric_name') or '').strip()
+        field = str(mi.get('field') or '').strip()
+        if field == 'window':
+            lines.append(f"「{metric}」的时间窗口 = {v}")
+        elif field == 'value':
+            lines.append(f"「{metric}」的阈值/区间 = {v}")
+        else:
+            lines.append(f"「{metric}」补充 {field} = {v}")
+    supplement = "；".join(lines) if lines else "（无）"
+
+    settings = read_settings()
+    provider = str(settings.get('llm_provider') or '').strip()
+    api_key = str(settings.get('llm_api_key') or '').strip()
+    model = str(settings.get('llm_model') or '').strip()
+    base_url = str(settings.get('llm_base_url') or '').strip()
+    if not provider or not api_key:
+        return jsonify({'success': False, 'message': '请先在「设置」页配置 AI 模型（provider/api_key）'}), 400
 
     try:
-        draft_final = apply_answers(draft, questions, answers)
-        remain = build_questions(draft_final)
-        if remain:
+        draft2 = parse_fund_pick_prompt_refine(prompt, supplement, draft_preview, {
+            'provider': provider,
+            'api_key': api_key,
+            'model': model,
+            'base_url': base_url,
+        })
+        missing2 = build_missing_items(draft2)
+        sig2 = missing_signature(missing2)
+
+        # 防止死循环：签名不变则失败
+        if prev_signature and sig2 and prev_signature == sig2:
+            return jsonify({'success': False, 'message': '补全后缺失项仍未变化，请在提示词中补充更明确的阈值/时间窗口', 'missing_items': missing2}), 400
+
+        if missing2:
+            next_round = round_num + 1
+            if next_round >= 3:
+                return jsonify({'success': False, 'message': '边界仍不明确，已达补全次数上限（3轮），请在提示词中补充关键阈值/时间窗口后再试', 'missing_items': missing2}), 400
             return jsonify({
                 'success': True,
                 'need_clarify': True,
-                'questions': remain,
-                'draft_preview': draft_final,
+                'round': next_round,
+                'missing_items': missing2,
+                'missing_signature': sig2,
+                'draft_preview': draft2,
             })
-        return jsonify({'success': True, 'need_clarify': False, 'draft': draft_final})
+        return jsonify({'success': True, 'need_clarify': False, 'round': round_num + 1, 'draft': draft2})
+    except FundPickParseError as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)[:500]}), 400
 

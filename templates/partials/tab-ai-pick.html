@@ -49,21 +49,6 @@
                 </div>
             </div>
 
-            <!-- 最小必要交互：边界补全 -->
-            <div id="ai-fund-pick-clarify" class="hidden mt-6">
-                <div class="rounded-2xl border border-white/10 bg-black/15 p-4">
-                    <div class="text-sm font-semibold text-slate-200 mb-3">需要补充的信息</div>
-                    <div id="ai-fund-pick-clarify-questions" class="space-y-4"></div>
-                    <div class="mt-4 flex justify-end gap-2">
-                        <button type="button" id="ai-fund-pick-clarify-confirm-btn"
-                                class="btn btn-primary btn-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                                disabled>
-                            继续生成草案
-                        </button>
-                    </div>
-                </div>
-            </div>
-
             <div id="ai-fund-pick-error" class="hidden mt-6">
                 <div class="alert alert-error">
                     <span id="ai-fund-pick-error-text">生成失败</span>
@@ -72,3 +57,25 @@
         </div>
     </div>
 </div>
+
+<!-- 边界补全弹框 -->
+<dialog id="ai-fund-pick-clarify-modal" class="modal">
+    <div class="modal-box bg-base-300/90 backdrop-blur-md max-w-3xl">
+        <h3 class="font-bold text-lg mb-2">边界不明确，需要补充信息</h3>
+        <p class="text-sm text-slate-300 mb-4">请补全以下缺失项，然后点击“重新生成草案”。</p>
+
+        <div id="ai-fund-pick-clarify-round" class="text-xs text-slate-400 mb-3"></div>
+
+        <div id="ai-fund-pick-missing-list" class="space-y-4"></div>
+
+        <div class="modal-action flex items-center justify-between gap-2">
+            <button type="button" class="btn" id="ai-fund-pick-clarify-cancel-btn">取消</button>
+            <button type="button" class="btn btn-primary" id="ai-fund-pick-clarify-regenerate-btn" disabled>
+                重新生成草案
+            </button>
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>关闭</button>
+    </form>
+</dialog>

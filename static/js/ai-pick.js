@@ -1,42 +1,32 @@
-// AI 选基（第 1 步：解析提示词为 draft）
+// AI 选基（第 1 步：解析提示词为 draft，并在边界不明确时弹框补全后重新生成）
 const AiFundPick = {
     _busy: false,
     _lastPrompt: '',
     _lastDraftPreview: null,
-    _lastQuestions: null,
-    _answers: {},
+    _lastMissingItems: null,
+    _round: 0,
+    _missingSignature: '',
+    _prevMissingSignature: '',
 
-    init: async function () {
+    init: async function() {
         this.bind();
         await this.checkConfig();
     },
 
-    bind: function () {
+    bind: function() {
         const genBtn = document.getElementById('ai-fund-pick-generate-btn');
         const resetBtn = document.getElementById('ai-fund-pick-reset-btn');
-        const clarifyConfirmBtn = document.getElementById('ai-fund-pick-clarify-confirm-btn');
+        const cancelBtn = document.getElementById('ai-fund-pick-clarify-cancel-btn');
+        const regenBtn = document.getElementById('ai-fund-pick-clarify-regenerate-btn');
 
-        if (genBtn) {
-            genBtn.addEventListener('click', async () => {
-                await this.generateDraft();
-            });
-        }
-        if (resetBtn) {
-            resetBtn.addEventListener('click', () => {
-                this.reset();
-            });
-        }
-        if (clarifyConfirmBtn) {
-            clarifyConfirmBtn.addEventListener('click', async () => {
-                await this.confirmClarify();
-            });
-        }
+        if (genBtn) genBtn.addEventListener('click', () => this.generateDraft());
+        if (resetBtn) resetBtn.addEventListener('click', () => this.reset());
+        if (cancelBtn) cancelBtn.addEventListener('click', () => this.closeClarifyModal());
+        if (regenBtn) regenBtn.addEventListener('click', () => this.refineDraft());
 
-        // 当切换到 AI 选基 Tab 时刷新配置状态
+        // 切到 AI 选基 tab 时刷新配置
         document.querySelectorAll('[data-tab="ai-pick"]').forEach(t => {
-            t.addEventListener('click', () => {
-                this.checkConfig();
-            });
+            t.addEventListener('click', () => this.checkConfig());
         });
     },
 
@@ -58,7 +48,7 @@ const AiFundPick = {
         }
     },
 
-    reset: function () {
+    reset: function() {
         const promptEl = document.getElementById('ai-fund-pick-prompt');
         if (promptEl) promptEl.value = '';
 
@@ -68,180 +58,42 @@ const AiFundPick = {
         const errEl = document.getElementById('ai-fund-pick-error');
         if (errEl) errEl.classList.add('hidden');
 
-        const clarifyEl = document.getElementById('ai-fund-pick-clarify');
-        if (clarifyEl) clarifyEl.classList.add('hidden');
-
+        this._busy = false;
         this._lastPrompt = '';
         this._lastDraftPreview = null;
-        this._lastQuestions = null;
-        this._answers = {};
+        this._lastMissingItems = null;
+        this._round = 0;
+        this._missingSignature = '';
+        this._prevMissingSignature = '';
+        this.closeClarifyModal();
     },
 
-    _renderClarifyQuestions: function (questions) {
-        const clarifyEl = document.getElementById('ai-fund-pick-clarify');
-        const listEl = document.getElementById('ai-fund-pick-clarify-questions');
-        const confirmBtn = document.getElementById('ai-fund-pick-clarify-confirm-btn');
-        if (!clarifyEl || !listEl || !confirmBtn) return;
-
-        this._answers = {};
-        this._lastQuestions = Array.isArray(questions) ? questions : [];
-
-        const hasAny = this._lastQuestions.length > 0;
-        clarifyEl.classList.toggle('hidden', !hasAny);
-        listEl.innerHTML = '';
-
-        if (!hasAny) {
-            confirmBtn.disabled = true;
-            return;
-        }
-
-        // 对每个 question 渲染：title + options buttons
-        this._lastQuestions.forEach(q => {
-            const qid = String(q.question_id || '');
-            const title = String(q.title || '');
-            const opts = Array.isArray(q.options) ? q.options : [];
-
-            const wrap = document.createElement('div');
-            wrap.className = 'space-y-2';
-
-            const titleEl = document.createElement('div');
-            titleEl.className = 'text-sm text-slate-200';
-            titleEl.textContent = title || '请补充信息';
-            wrap.appendChild(titleEl);
-
-            const btnRow = document.createElement('div');
-            btnRow.className = 'flex flex-wrap gap-2';
-
-            if (opts.length) {
-                opts.forEach(opt => {
-                    const v = opt.value;
-                    const label = String(opt.label || v);
-                    const btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'btn btn-xs btn-outline';
-                    btn.textContent = label;
-                    btn.addEventListener('click', () => {
-                        // 单选：记录答案
-                        this._answers[qid] = v;
-                        // UI 高亮
-                        Array.from(btnRow.querySelectorAll('button')).forEach(b => {
-                            b.classList.toggle('btn-active', b === btn);
-                        });
-                        this._syncClarifyConfirmEnabled();
-                    });
-                    btnRow.appendChild(btn);
-                });
-            } else {
-                const hint = document.createElement('div');
-                hint.className = 'text-xs text-slate-400';
-                hint.textContent = '该项需要在提示词里提供明确阈值（当前页面暂不支持填写）。';
-                btnRow.appendChild(hint);
-            }
-
-            wrap.appendChild(btnRow);
-            listEl.appendChild(wrap);
-        });
-
-        this._syncClarifyConfirmEnabled();
-    },
-
-    _syncClarifyConfirmEnabled: function () {
-        const confirmBtn = document.getElementById('ai-fund-pick-clarify-confirm-btn');
-        if (!confirmBtn) return;
-        const qs = Array.isArray(this._lastQuestions) ? this._lastQuestions : [];
-        // 只要存在“无 options”的问题，则无法继续（最小实现：要求用户改提示词）
-        const hasUnsupported = qs.some(q => !(Array.isArray(q.options) && q.options.length));
-        if (hasUnsupported) {
-            confirmBtn.disabled = true;
-            return;
-        }
-        const allAnswered = qs.every(q => {
-            const qid = String(q.question_id || '');
-            return qid && this._answers[qid] !== undefined;
-        });
-        confirmBtn.disabled = !allAnswered;
-    },
-
-    async confirmClarify() {
-        if (this._busy) return;
+    _showError: function(msg) {
         const errEl = document.getElementById('ai-fund-pick-error');
         const errTextEl = document.getElementById('ai-fund-pick-error-text');
-        const planEl = document.getElementById('ai-fund-pick-plan-json');
+        if (errTextEl) errTextEl.textContent = String(msg || '生成失败');
+        if (errEl) errEl.classList.remove('hidden');
+    },
 
-        if (!this._lastPrompt || !this._lastDraftPreview || !Array.isArray(this._lastQuestions)) {
-            return;
-        }
-
-        const answers = this._lastQuestions.map(q => {
-            const qid = String(q.question_id || '');
-            return { question_id: qid, value: this._answers[qid] };
-        });
-
-        this._busy = true;
+    _hideError: function() {
+        const errEl = document.getElementById('ai-fund-pick-error');
         if (errEl) errEl.classList.add('hidden');
-        if (planEl) planEl.textContent = '生成中...';
-
-        try {
-            const resp = await fetch('/api/ai-fund-pick/parse/confirm', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    prompt: this._lastPrompt,
-                    draft: this._lastDraftPreview,
-                    questions: this._lastQuestions,
-                    answers,
-                }),
-            });
-            const data = await resp.json();
-            if (!data || !data.success) {
-                const msg = (data && (data.message || data.error)) || '生成失败';
-                if (errTextEl) errTextEl.textContent = String(msg);
-                if (errEl) errEl.classList.remove('hidden');
-                if (planEl) planEl.textContent = '（生成失败）';
-                return;
-            }
-
-            if (data.need_clarify) {
-                // 仍需补全（例如 value 缺失）
-                this._lastDraftPreview = data.draft_preview || this._lastDraftPreview;
-                this._renderClarifyQuestions(data.questions || []);
-                if (planEl) planEl.textContent = JSON.stringify(this._lastDraftPreview || {}, null, 2);
-                return;
-            }
-
-            const draft = data.draft || {};
-            // 完成：隐藏 clarify，展示最终 draft
-            const clarifyEl = document.getElementById('ai-fund-pick-clarify');
-            if (clarifyEl) clarifyEl.classList.add('hidden');
-            if (planEl) planEl.textContent = JSON.stringify(draft, null, 2);
-        } catch (e) {
-            if (errTextEl) errTextEl.textContent = '网络错误或服务异常';
-            if (errEl) errEl.classList.remove('hidden');
-            if (planEl) planEl.textContent = '（生成失败）';
-        } finally {
-            this._busy = false;
-        }
     },
 
     async generateDraft() {
         if (this._busy) return;
         const promptEl = document.getElementById('ai-fund-pick-prompt');
         const planEl = document.getElementById('ai-fund-pick-plan-json');
-        const errEl = document.getElementById('ai-fund-pick-error');
-        const errTextEl = document.getElementById('ai-fund-pick-error-text');
         const genBtn = document.getElementById('ai-fund-pick-generate-btn');
-        const clarifyEl = document.getElementById('ai-fund-pick-clarify');
-
         const prompt = String((promptEl && promptEl.value) || '').trim();
+
         if (!prompt) {
-            if (errTextEl) errTextEl.textContent = '请输入筛选提示词';
-            if (errEl) errEl.classList.remove('hidden');
+            this._showError('请输入筛选提示词');
             return;
         }
 
         this._busy = true;
-        if (errEl) errEl.classList.add('hidden');
-        if (clarifyEl) clarifyEl.classList.add('hidden');
+        this._hideError();
         if (genBtn) genBtn.disabled = true;
         if (planEl) planEl.textContent = '生成中...';
 
@@ -253,37 +105,225 @@ const AiFundPick = {
             });
             const data = await resp.json();
             if (!data || !data.success) {
-                const msg = (data && (data.message || data.error)) || '生成失败';
-                if (errTextEl) errTextEl.textContent = String(msg);
-                if (errEl) errEl.classList.remove('hidden');
+                this._showError((data && (data.message || data.error)) || '生成失败');
                 if (planEl) planEl.textContent = '（生成失败）';
                 return;
             }
-            // 需要补全边界
+
+            this._lastPrompt = prompt;
+            this._round = Number(data.round || 0);
+
             if (data.need_clarify) {
-                this._lastPrompt = prompt;
                 this._lastDraftPreview = data.draft_preview || {};
-                this._renderClarifyQuestions(data.questions || []);
+                this._lastMissingItems = Array.isArray(data.missing_items) ? data.missing_items : [];
+                this._missingSignature = String(data.missing_signature || '');
+                this._prevMissingSignature = ''; // 首轮没有 prev
+
                 if (planEl) planEl.textContent = JSON.stringify(this._lastDraftPreview || {}, null, 2);
+                this.openClarifyModal();
                 return;
             }
 
             const draft = data.draft || {};
-            this._lastPrompt = prompt;
             this._lastDraftPreview = draft;
-            this._lastQuestions = null;
+            this._lastMissingItems = null;
             if (planEl) planEl.textContent = JSON.stringify(draft, null, 2);
         } catch (e) {
-            if (errTextEl) errTextEl.textContent = '网络错误或服务异常';
-            if (errEl) errEl.classList.remove('hidden');
+            this._showError('网络错误或服务异常');
             if (planEl) planEl.textContent = '（生成失败）';
         } finally {
             this._busy = false;
             if (genBtn) genBtn.disabled = false;
         }
     },
+
+    openClarifyModal: function() {
+        const dlg = document.getElementById('ai-fund-pick-clarify-modal');
+        const listEl = document.getElementById('ai-fund-pick-missing-list');
+        const roundEl = document.getElementById('ai-fund-pick-clarify-round');
+        const regenBtn = document.getElementById('ai-fund-pick-clarify-regenerate-btn');
+        if (!dlg || !listEl || !regenBtn) return;
+
+        const items = Array.isArray(this._lastMissingItems) ? this._lastMissingItems : [];
+        listEl.innerHTML = '';
+
+        if (roundEl) {
+            const r = Number(this._round || 0);
+            roundEl.textContent = `第 ${Math.max(1, r + 1)}/3 轮补全`;
+        }
+
+        items.forEach(item => {
+            const itemId = String(item.item_id || '');
+            const metric = String(item.metric_name || '');
+            const field = String(item.field || '');
+            const evidence = String(item.evidence || '');
+            const problem = String(item.problem || '');
+            const suggestion = String(item.suggestion || '');
+            const options = Array.isArray(item.options) ? item.options : [];
+
+            const wrap = document.createElement('div');
+            wrap.className = 'rounded-xl border border-white/10 bg-black/10 p-3 space-y-2';
+            wrap.dataset.itemId = itemId;
+            wrap.dataset.required = item.required ? '1' : '0';
+
+            const title = document.createElement('div');
+            title.className = 'text-sm text-slate-100 font-semibold';
+            title.textContent = `${metric}（${field}）`;
+            wrap.appendChild(title);
+
+            const ev = document.createElement('div');
+            ev.className = 'text-xs text-slate-300';
+            ev.textContent = evidence ? `证据：${evidence}` : '';
+            wrap.appendChild(ev);
+
+            const prob = document.createElement('div');
+            prob.className = 'text-xs text-warning';
+            prob.textContent = problem ? `问题：${problem}` : '';
+            wrap.appendChild(prob);
+
+            const sug = document.createElement('div');
+            sug.className = 'text-xs text-slate-400';
+            sug.textContent = suggestion ? `建议：${suggestion}` : '';
+            wrap.appendChild(sug);
+
+            // 输入控件：必须允许用户输入
+            const inputRow = document.createElement('div');
+            inputRow.className = 'flex flex-wrap items-center gap-2 mt-2';
+
+            if (options.length) {
+                const select = document.createElement('select');
+                select.className = 'select select-bordered select-sm';
+                select.innerHTML = '<option value=\"\">（选择建议）</option>' + options.map(o => {
+                    const v = String(o.value || '');
+                    const l = String(o.label || v);
+                    return `<option value=\"${this._escapeAttr(v)}\">${l}</option>`;
+                }).join('');
+                select.addEventListener('change', () => {
+                    if (textInput) textInput.value = select.value || '';
+                    this._syncRegenerateEnabled();
+                });
+                inputRow.appendChild(select);
+            }
+
+            const textInput = document.createElement('input');
+            textInput.type = 'text';
+            textInput.className = 'input input-bordered input-sm flex-1 min-w-[220px]';
+            textInput.placeholder = field === 'window' ? '请输入时间窗口（如 1y/3y/成立以来）' : '请输入具体值（如 30 或 10-200）';
+            textInput.dataset.itemId = itemId;
+            textInput.addEventListener('input', () => this._syncRegenerateEnabled());
+            inputRow.appendChild(textInput);
+
+            wrap.appendChild(inputRow);
+            listEl.appendChild(wrap);
+        });
+
+        this._syncRegenerateEnabled();
+        if (typeof dlg.showModal === 'function') dlg.showModal();
+        else dlg.setAttribute('open', '');
+    },
+
+    closeClarifyModal: function() {
+        const dlg = document.getElementById('ai-fund-pick-clarify-modal');
+        if (!dlg) return;
+        try { dlg.close(); } catch (e) { /* ignore */ }
+    },
+
+    _escapeAttr: function(s) {
+        return String(s || '').replace(/&/g, '&amp;').replace(/\"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    },
+
+    _collectUserFills: function() {
+        const listEl = document.getElementById('ai-fund-pick-missing-list');
+        if (!listEl) return [];
+        const fills = [];
+        listEl.querySelectorAll('input[data-item-id]').forEach(inp => {
+            const itemId = String(inp.dataset.itemId || '');
+            const val = String(inp.value || '').trim();
+            if (!itemId) return;
+            fills.push({ item_id: itemId, value: val });
+        });
+        return fills;
+    },
+
+    _syncRegenerateEnabled: function() {
+        const regenBtn = document.getElementById('ai-fund-pick-clarify-regenerate-btn');
+        const listEl = document.getElementById('ai-fund-pick-missing-list');
+        if (!regenBtn || !listEl) return;
+
+        let ok = true;
+        listEl.querySelectorAll('[data-item-id]').forEach(row => {
+            const required = row.dataset.required === '1';
+            if (!required) return;
+            const input = row.querySelector('input[data-item-id]');
+            const val = String((input && input.value) || '').trim();
+            if (!val) ok = false;
+        });
+        regenBtn.disabled = !ok;
+    },
+
+    async refineDraft() {
+        if (this._busy) return;
+        const planEl = document.getElementById('ai-fund-pick-plan-json');
+        const regenBtn = document.getElementById('ai-fund-pick-clarify-regenerate-btn');
+
+        const fills = this._collectUserFills();
+        if (regenBtn && regenBtn.disabled) return;
+
+        this._busy = true;
+        this._hideError();
+        if (regenBtn) regenBtn.disabled = true;
+        if (planEl) planEl.textContent = '重新生成中...';
+
+        try {
+            const resp = await fetch('/api/ai-fund-pick/parse/refine', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    prompt: this._lastPrompt,
+                    round: this._round,
+                    draft_preview: this._lastDraftPreview || {},
+                    missing_items: this._lastMissingItems || [],
+                    user_fills: fills,
+                    prev_missing_signature: this._missingSignature || '',
+                }),
+            });
+            const data = await resp.json();
+            if (!data || !data.success) {
+                this._showError((data && (data.message || data.error)) || '重新生成失败');
+                if (planEl) planEl.textContent = JSON.stringify(this._lastDraftPreview || {}, null, 2);
+                return;
+            }
+
+            this._round = Number(data.round || (this._round + 1));
+
+            if (data.need_clarify) {
+                // 进入下一轮
+                this._prevMissingSignature = this._missingSignature;
+                this._missingSignature = String(data.missing_signature || '');
+                this._lastDraftPreview = data.draft_preview || {};
+                this._lastMissingItems = Array.isArray(data.missing_items) ? data.missing_items : [];
+                if (planEl) planEl.textContent = JSON.stringify(this._lastDraftPreview || {}, null, 2);
+                this.openClarifyModal();
+                return;
+            }
+
+            // 完成
+            const draft = data.draft || {};
+            this._lastDraftPreview = draft;
+            this._lastMissingItems = null;
+            this.closeClarifyModal();
+            if (planEl) planEl.textContent = JSON.stringify(draft, null, 2);
+        } catch (e) {
+            this._showError('网络错误或服务异常');
+            if (planEl) planEl.textContent = JSON.stringify(this._lastDraftPreview || {}, null, 2);
+        } finally {
+            this._busy = false;
+            if (regenBtn) this._syncRegenerateEnabled();
+        }
+    },
 };
 
-document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener('DOMContentLoaded', function() {
     AiFundPick.init();
 });
+

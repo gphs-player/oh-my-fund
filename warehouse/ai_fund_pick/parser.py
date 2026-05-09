@@ -12,7 +12,7 @@ from typing import Any
 
 from warehouse.llm import create_llm
 
-from .prompt import OP_ENUM, SYSTEM_PROMPT, build_user_message
+from .prompt import OP_ENUM, SYSTEM_PROMPT, build_refine_user_message, build_user_message
 
 
 class FundPickParseError(ValueError):
@@ -184,3 +184,49 @@ def parse_fund_pick_prompt(prompt: str, llm_config: dict) -> dict:
 
     return _validate_and_normalize_draft(data)
 
+
+def parse_fund_pick_prompt_refine(prompt: str, supplement: str, draft_preview: dict | None, llm_config: dict) -> dict:
+    """二次生成：结合用户补充边界信息，重新调用 LLM 生成 draft。"""
+    prompt = str(prompt or "").strip()
+    supplement = str(supplement or "").strip()
+    if not prompt:
+        raise FundPickParseError("提示词不能为空")
+    if not supplement:
+        raise FundPickParseError("缺少补充边界信息")
+
+    provider = str(llm_config.get("provider") or "").strip()
+    api_key = str(llm_config.get("api_key") or "").strip()
+    model = str(llm_config.get("model") or "").strip()
+    base_url = str(llm_config.get("base_url") or "").strip()
+
+    if not provider or not api_key:
+        raise FundPickParseError("LLM 配置缺失（provider/api_key）")
+
+    llm = create_llm(
+        provider,
+        {
+            "api_key": api_key,
+            "model": model,
+            "base_url": base_url,
+        },
+    )
+
+    raw = llm.chat(
+        system_prompt=SYSTEM_PROMPT,
+        user_message=build_refine_user_message(prompt, supplement, draft_preview),
+    )
+    raw = (raw or "").strip()
+    if not raw:
+        raise FundPickParseError("模型未返回内容")
+
+    candidate = _strip_code_fence(raw)
+    try:
+        data = json.loads(candidate)
+    except Exception:
+        try:
+            blob = _extract_first_json_object(candidate)
+            data = json.loads(blob)
+        except Exception as exc:
+            raise FundPickParseError(f"模型输出格式错误，无法解析为 JSON：{exc}") from exc
+
+    return _validate_and_normalize_draft(data)
