@@ -1,18 +1,11 @@
-"""最小化 LLM 适配层（用于本项目的 AI 能力）。
+"""LLM 适配层。
 
-当前仅提供一个“OpenAI 兼容接口”适配器，满足：
-- chat(system_prompt, user_message) -> str
-
-说明：
-- provider 参数目前不参与分流，仅保留接口形态，便于后续扩展。
+对外导出：
+- create_llm: 根据 provider_type 创建对应的 LLM 客户端
+- get_available_llm_types: 返回可用 provider 列表（用于设置页下拉）
 """
 
-from .openai_compatible import OpenAICompatibleLLM
+from .base import BaseLLM
+from .factory import create_llm, get_available_llm_types
 
-
-def create_llm(provider_type: str, config: dict) -> OpenAICompatibleLLM:
-    return OpenAICompatibleLLM(config)
-
-
-__all__ = ["create_llm", "OpenAICompatibleLLM"]
-
+__all__ = ["BaseLLM", "create_llm", "get_available_llm_types"]
