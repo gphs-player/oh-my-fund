@@ -11,17 +11,22 @@ from warehouse import FundRepository
 from warehouse.adapters import create_datasource, get_available_types
 from warehouse.ai_fund_pick.parser import FundPickParseError, parse_fund_pick_prompt
 from warehouse.ai_fund_pick.clarify import apply_answers, build_questions
+from warehouse.paths import STORE_DIR, migrate_data_layout_if_needed
 
 app = Flask(__name__)
 
+# 迁移并整理 data 目录结构（store/cache 分离、缓存去前缀命名）
+migrate_data_layout_if_needed()
+
 # 市场列表文件路径
-MARKETS_FILE = os.path.join(os.path.dirname(__file__), 'data', 'markets.csv')
+MARKETS_FILE = os.path.join(STORE_DIR, 'markets.csv')
 
 # 默认市场列表
 DEFAULT_MARKETS = ['美股', 'A股', '亚太', '港股', '全球']
 DEFAULT_DATASOURCE_TYPE = 'Default'
 DEFAULT_DATASOURCE_NAME = '默认数据源'
 LEGACY_DEFAULT_DATASOURCE_TYPES = {'default', DEFAULT_DATASOURCE_TYPE}
+REMOVED_DATASOURCE_TYPES = {"EastMoneyMob"}
 
 
 def ensure_markets_file():
@@ -575,13 +580,13 @@ def delete_investment(fund_code):
 # =====================
 # 数据源配置文件路径
 # =====================
-DATASOURCES_FILE = os.path.join(os.path.dirname(__file__), 'data', 'datasources.csv')
-SETTINGS_FILE = os.path.join(os.path.dirname(__file__), 'data', 'settings.csv')
-INVESTMENTS_FILE = os.path.join(os.path.dirname(__file__), 'data', 'investments.csv')
-FAVORITES_FILE = os.path.join(os.path.dirname(__file__), 'data', 'favorites.csv')
-FAVORITE_GROUPS_FILE = os.path.join(os.path.dirname(__file__), 'data', 'favorite_groups.csv')
-FAVORITE_GROUP_MEMBERSHIPS_FILE = os.path.join(os.path.dirname(__file__), 'data', 'favorite_group_memberships.csv')
-STRATEGIES_FILE = os.path.join(os.path.dirname(__file__), 'data', 'strategies.csv')
+DATASOURCES_FILE = os.path.join(STORE_DIR, 'datasources.csv')
+SETTINGS_FILE = os.path.join(STORE_DIR, 'settings.csv')
+INVESTMENTS_FILE = os.path.join(STORE_DIR, 'investments.csv')
+FAVORITES_FILE = os.path.join(STORE_DIR, 'favorites.csv')
+FAVORITE_GROUPS_FILE = os.path.join(STORE_DIR, 'favorite_groups.csv')
+FAVORITE_GROUP_MEMBERSHIPS_FILE = os.path.join(STORE_DIR, 'favorite_group_memberships.csv')
+STRATEGIES_FILE = os.path.join(STORE_DIR, 'strategies.csv')
 DEFAULT_FAVORITE_GROUP_ID = 'default'
 DEFAULT_FAVORITE_GROUP_NAME = '默认组'
 
@@ -872,6 +877,9 @@ def ensure_default_datasource_record():
                 'config': json.loads(row['config']),
                 'is_active': row['is_active'] == 'true'
             })
+
+    # 清理已下线的数据源类型（例如 EastMoneyMob）
+    datasources = [ds for ds in datasources if ds.get('type') not in REMOVED_DATASOURCE_TYPES]
 
     default_datasources = [ds for ds in datasources if is_builtin_datasource(ds)]
     changed = False
@@ -1366,12 +1374,8 @@ def test_datasource(ds_id):
         if ds['id'] == ds_id:
             try:
                 source = create_datasource(ds['type'], ds['config'])
-                # 只测试第一页少量数据，避免全量拉取导致慢/超时
-                if hasattr(source, 'get_fund_list_page'):
-                    items, _total = source.get_fund_list_page(page_num=1, page_size=5)
-                else:
-                    items = source.get_fund_list(page_num=1, page_size=5)
-                return jsonify({"success": True, "message": "连接成功", "count": len(items)})
+                items = source.get_fund_list()
+                return jsonify({"success": True, "message": "连接成功", "count": min(len(items), 5)})
             except Exception as e:
                 return jsonify({'success': False, 'message': str(e), 'count': 0})
     
@@ -1532,23 +1536,8 @@ FUND_TYPE_NAME_BY_CODE_EASTMONEY = {x["fund_type_code"]: x["fund_type_name"] for
 def get_fund_types():
     """获取基金类型选项（用于前端下拉筛选）。"""
     try:
-        active_ds = fund_repository.datasource or fund_repository.default_datasource
-        active_type = getattr(active_ds, 'source_type', '') or ''
-
-        if str(active_type) == 'EastMoneyMob':
-            return jsonify({"success": True, "items": FUND_TYPE_OPTIONS_EASTMONEY})
-
-        # Default/其他：从全量基金列表去重 fund_type（中文）
-        funds = fund_repository.get_fund_list()
-        seen = set()
-        items = [{"fund_type_code": "0", "fund_type_name": "全部"}]
-        for f in funds:
-            name = str(f.get("fund_type", "") or "").strip()
-            if not name or name in seen:
-                continue
-            seen.add(name)
-            items.append({"fund_type_code": name, "fund_type_name": name})
-        return jsonify({"success": True, "items": items})
+        # 仅保留 Default 数据源后：基金榜使用“基金排名”接口（FundType 枚举）
+        return jsonify({"success": True, "items": FUND_TYPE_OPTIONS_EASTMONEY})
     except Exception as e:
         return jsonify({"success": False, "message": str(e), "items": []}), 500
 
@@ -1572,84 +1561,93 @@ def get_funds():
         if page_size > 200:
             page_size = 200
 
-        active_ds = fund_repository.datasource or fund_repository.default_datasource
-        active_type = getattr(active_ds, 'source_type', '') or ''
+        # 仅保留 Default 数据源后：基金榜列表改为“基金排名”接口（按日涨跌幅排序）
+        # FundType：沿用东财枚举（0=全部）
+        try:
+            eastmoney_fund_type = int(fund_type_code or 0)
+        except ValueError:
+            eastmoney_fund_type = 0
 
-        # 新东方财富数据源：映射到其分页能力，直接只拉一页（不走全量缓存）
-        if str(active_type) == 'EastMoneyMob':
-            # 优先使用带 total 的分页方法
-            # 解析 FundType 入参
-            try:
-                eastmoney_fund_type = int(fund_type_code or 0)
-            except ValueError:
-                eastmoney_fund_type = 0
+        # DefaultDataSource.get_fund_rank_page
+        items, total = fund_repository.default_datasource.get_fund_rank_page(
+            page_num=page_num,
+            page_size=page_size,
+            fund_type=eastmoney_fund_type,
+        )
 
-            if hasattr(active_ds, 'get_fund_list_page'):
-                items, total = active_ds.get_fund_list_page(page_num=page_num, page_size=page_size, fund_type=eastmoney_fund_type)
-            else:
-                items = active_ds.get_fund_list(page_num=page_num, page_size=page_size)
-                total = len(items)
+        # 仅做 q 过滤（过滤后 total 退化为当前页数量）
+        if q:
+            items = [
+                x for x in (items or [])
+                if (q in str(x.get('fund_code', '') or '')) or (q in str(x.get('fund_name', '') or ''))
+            ]
+            total = len(items)
 
-            # fund_type_code / q 过滤：东财已通过 FundType 在服务端过滤；这里仅做 q 过滤
-            if q:
-                items = [
-                    x for x in (items or [])
-                    if (q in str(x.get('fund_code', '') or '')) or (q in str(x.get('fund_name', '') or ''))
-                ]
-                # q 过滤后的 total 无法精确计算，这里退化为当前页数量
-                total = len(items)
-
-            # 统一输出 fund_type_code/name
-            type_name = FUND_TYPE_NAME_BY_CODE_EASTMONEY.get(str(eastmoney_fund_type), "")
-            normalized_items = []
-            for x in (items or []):
-                row = dict(x)
-                row["fund_type_code"] = str(eastmoney_fund_type)
-                row["fund_type_name"] = type_name
-                # 兼容：若接口返回了 FUNDTYPE 也不影响展示
-                row.pop("fund_type", None)
-                normalized_items.append(row)
-
-            return jsonify({
-                'success': True,
-                'pageNum': page_num,
-                'pageSize': page_size,
-                'total': total,
-                'items': normalized_items,
-            })
-
-        # Default/其他数据源：使用全量缓存数据做后端过滤 + 分页切片
-        funds = fund_repository.get_fund_list()
-        filtered = []
-        for f in funds:
-            code = str(f.get('fund_code', '') or '')
-            name = str(f.get('fund_name', '') or '')
-            ftype_name = str(f.get('fund_type', '') or '').strip()
-            # Default 的 fund_type_code 就用中文类型名本身
-            if fund_type_code and fund_type_code != "0" and ftype_name != fund_type_code:
-                continue
-            if q and (q not in code) and (q not in name):
-                continue
-            filtered.append({
-                **f,
-                "fund_type_code": ftype_name,
-                "fund_type_name": ftype_name,
-            })
-
-        total = len(filtered)
-        start = (page_num - 1) * page_size
-        end = start + page_size
-        page_items = filtered[start:end]
+        # 统一输出 fund_type_code/name（按筛选项）
+        type_name = FUND_TYPE_NAME_BY_CODE_EASTMONEY.get(str(eastmoney_fund_type), "")
+        normalized_items = []
+        for x in (items or []):
+            row = dict(x)
+            row["fund_type_code"] = str(eastmoney_fund_type)
+            row["fund_type_name"] = type_name
+            row.pop("fund_type", None)
+            normalized_items.append(row)
 
         return jsonify({
             'success': True,
             'pageNum': page_num,
             'pageSize': page_size,
             'total': total,
-            'items': page_items,
+            'items': normalized_items,
         })
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/funds/search', methods=['GET'])
+def search_funds():
+    """根据关键字搜索基金（基于基金列表接口数据，不再直连 fundcode_search.js，也不维护独立搜索缓存）。"""
+    try:
+        q = str((request.args.get('q') or '')).strip()
+        limit_raw = str((request.args.get('limit') or '')).strip()
+        try:
+            limit = int(limit_raw or 20)
+        except ValueError:
+            limit = 20
+        if limit < 1:
+            limit = 1
+        if limit > 50:
+            limit = 50
+
+        if not q:
+            return jsonify({"success": True, "q": q, "limit": limit, "items": [], "cached_until": ""})
+
+        funds = fund_repository.get_fund_list()
+        q_lower = q.lower()
+
+        matched = []
+        for it in funds:
+            code = str(it.get("fund_code") or "")
+            name = str(it.get("fund_name") or "")
+            if (q_lower in code.lower()) or (q_lower in name.lower()):
+                matched.append({
+                    "fund_code": code,
+                    "fund_name": name,
+                    "fund_type": str(it.get("fund_type") or ""),
+                })
+                if len(matched) >= limit:
+                    break
+
+        return jsonify({
+            "success": True,
+            "q": q,
+            "limit": limit,
+            "items": matched,
+            # 不再维护独立的 15:00 搜索缓存：由基金列表缓存策略接管
+            "cached_until": "",
+        })
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e), "items": []}), 500
 
 
 @app.route('/api/funds/<fund_code>/history', methods=['GET'])
@@ -1776,6 +1774,47 @@ def get_funds_gz():
         return jsonify({'success': False, 'message': str(e)}), 400
 
 
+@app.route('/api/funds/<fund_code>/holdings/dates', methods=['GET'])
+def get_fund_holding_dates(fund_code):
+    """获取基金持仓公布日期列表"""
+    try:
+        dates = fund_repository.get_fund_holding_dates(fund_code)
+        return jsonify({
+            'success': True,
+            'data': {
+                'fund_code': fund_code,
+                'dates': dates,
+            },
+        })
+    except ValueError as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+
+
+@app.route('/api/funds/<fund_code>/holdings', methods=['GET'])
+def get_fund_holdings(fund_code):
+    """获取基金某日期的持仓明细"""
+    try:
+        report_date = (request.args.get('report_date') or '').strip()
+        if not report_date:
+            return jsonify({'success': False, 'message': 'report_date 参数必填'}), 400
+
+        holdings = fund_repository.get_fund_holdings(fund_code, report_date)
+        return jsonify({
+            'success': True,
+            'data': {
+                'fund_code': fund_code,
+                'report_date': report_date,
+                **holdings,
+            },
+        })
+    except ValueError as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+
+
 @app.route('/api/funds/<fund_code>/overview', methods=['GET'])
 def get_fund_overview(fund_code):
     """获取单只基金基本信息"""
@@ -1801,6 +1840,272 @@ def get_fund_overview(fund_code):
             items = []
 
         return jsonify({'success': True, 'fund_code': fund_code, 'items': items})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+
+
+@app.route('/api/funds/<fund_code>/ai-analysis', methods=['POST'])
+def fund_ai_analysis(fund_code):
+    """AI 一键基金分析"""
+    try:
+        from warehouse.analysis import run_fund_analysis, clear_analysis_cache
+
+        force = (request.args.get('force') or '').strip().lower() in {'1', 'true', 'yes'}
+        if force:
+            clear_analysis_cache(fund_code)
+
+        settings = read_settings()
+        result = run_fund_analysis(fund_code, fund_repository, settings)
+        return jsonify({'success': True, 'data': result})
+    except ValueError as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# ===== AI 分析任务（带进度）=====
+# 说明：当前实现为进程内内存任务队列，适用于单进程 Flask 启动方式（重启会丢失进行中的任务）。
+import threading
+import time
+import uuid
+from concurrent.futures import ThreadPoolExecutor
+
+
+class _AiAnalysisJobStore:
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._jobs = {}
+
+    def create(self, fund_code: str) -> dict:
+        job_id = uuid.uuid4().hex
+        now = time.time()
+        job = {
+            "job_id": job_id,
+            "fund_code": fund_code,
+            "status": "pending",  # pending|running|done|error
+            "percent": 0,
+            "current_step": {"key": "validate", "label": "校验输入与配置", "message": "准备开始..."},
+            "steps": [],
+            "result": None,
+            "error": None,
+            "created_at": now,
+            "updated_at": now,
+        }
+        with self._lock:
+            self._jobs[job_id] = job
+        return job
+
+    def get(self, job_id: str) -> dict | None:
+        with self._lock:
+            return self._jobs.get(job_id)
+
+    def update(self, job_id: str, patch: dict):
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if not job:
+                return
+            job.update(patch)
+            job["updated_at"] = time.time()
+
+
+_ai_analysis_jobs = _AiAnalysisJobStore()
+_ai_analysis_executor = ThreadPoolExecutor(max_workers=4)
+
+
+def _build_steps_snapshot():
+    # 与前端 AiPick._stepDefs 保持一致（key 稳定）
+    return [
+        {"key": "validate", "label": "校验输入与配置"},
+        {"key": "cache", "label": "检查缓存"},
+        {"key": "fetch_base", "label": "拉取基础数据"},
+        {"key": "fetch_holdings", "label": "拉取持仓明细"},
+        {"key": "compute", "label": "计算量化指标"},
+        {"key": "summary", "label": "组装分析摘要"},
+        {"key": "llm", "label": "调用模型分析"},
+        {"key": "parse", "label": "解析分析结果"},
+        {"key": "done", "label": "完成"},
+    ]
+
+
+@app.route('/api/funds/<fund_code>/ai-analysis/jobs', methods=['POST'])
+def create_fund_ai_analysis_job(fund_code):
+    """创建 AI 分析任务（异步 + 进度）"""
+    try:
+        import re
+        from warehouse.analysis import run_fund_analysis, clear_analysis_cache
+
+        code = str(fund_code or "").strip()
+        if not re.fullmatch(r"\d{5,8}", code):
+            return jsonify({"success": False, "message": "基金代码格式错误（需 5-8 位数字）"}), 400
+
+        payload = request.get_json(silent=True) or {}
+        force = bool(payload.get("force")) if isinstance(payload, dict) else False
+        if force:
+            clear_analysis_cache(code)
+
+        job = _ai_analysis_jobs.create(code)
+        job_id = job["job_id"]
+        _ai_analysis_jobs.update(job_id, {"steps": _build_steps_snapshot()})
+
+        settings = read_settings()
+
+        def progress_cb(**kwargs):
+            key = str(kwargs.get("key") or "").strip()
+            label = str(kwargs.get("label") or "").strip()
+            message = str(kwargs.get("message") or "").strip()
+            percent = kwargs.get("percent")
+            try:
+                percent = int(percent)
+            except Exception:
+                percent = 0
+            percent = max(0, min(100, percent))
+            _ai_analysis_jobs.update(job_id, {
+                "status": "running",
+                "percent": percent,
+                "current_step": {"key": key, "label": label, "message": message},
+            })
+
+        def task():
+            try:
+                _ai_analysis_jobs.update(job_id, {"status": "running"})
+                result = run_fund_analysis(code, fund_repository, settings, progress_cb=progress_cb)
+                _ai_analysis_jobs.update(job_id, {
+                    "status": "done",
+                    "percent": 100,
+                    "current_step": {"key": "done", "label": "完成", "message": "分析完成"},
+                    "result": result,
+                })
+            except Exception as e:
+                _ai_analysis_jobs.update(job_id, {
+                    "status": "error",
+                    "error": {"message": str(e)},
+                })
+
+        _ai_analysis_executor.submit(task)
+
+        return jsonify({"success": True, "job_id": job_id, "fund_code": code})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@app.route('/api/ai-analysis/jobs/<job_id>', methods=['GET'])
+def get_fund_ai_analysis_job(job_id):
+    """获取 AI 分析任务进度与结果"""
+    job = _ai_analysis_jobs.get(str(job_id or "").strip())
+    if not job:
+        return jsonify({"success": False, "message": "任务不存在或已过期"}), 404
+
+    # 返回必要字段，避免暴露内部时间戳等无用信息
+    return jsonify({
+        "success": True,
+        "job_id": job.get("job_id"),
+        "fund_code": job.get("fund_code"),
+        "status": job.get("status"),
+        "percent": job.get("percent", 0),
+        "current_step": job.get("current_step") or {},
+        "steps": job.get("steps") or [],
+        "result": job.get("result"),
+        "error": job.get("error"),
+    })
+
+
+@app.route('/api/llm/providers', methods=['GET'])
+def get_llm_providers():
+    """获取可用的 LLM 提供商列表"""
+    try:
+        from warehouse.llm import get_available_llm_types
+        return jsonify({'success': True, 'items': get_available_llm_types()})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/llm/models', methods=['POST'])
+def list_llm_models():
+    """动态从供应商拉取可用模型列表
+
+    接收：{provider, api_key, base_url?}
+    成功返回 {success: true, models: [id, ...], default_model}
+    """
+    try:
+        from warehouse.llm import create_llm
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'初始化失败: {e}'}), 500
+
+    data = request.get_json(silent=True) or {}
+    provider = str(data.get('provider') or '').strip()
+    api_key = str(data.get('api_key') or '').strip()
+    base_url = str(data.get('base_url') or '').strip()
+
+    if not provider:
+        return jsonify({'success': False, 'message': '请选择模型提供商'}), 400
+    if not api_key:
+        return jsonify({'success': False, 'message': '请填写 API Key'}), 400
+
+    try:
+        llm = create_llm(provider, {
+            'api_key': api_key,
+            'base_url': base_url,
+        })
+    except ValueError as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'创建客户端失败: {e}'}), 500
+
+    try:
+        models = llm.list_models()
+        return jsonify({
+            'success': True,
+            'models': sorted(models),
+            'default_model': getattr(llm, 'DEFAULT_MODEL', ''),
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+
+
+@app.route('/api/llm/test', methods=['POST'])
+def test_llm_config():
+    """测试 LLM 配置是否有效
+
+    接收：{provider, api_key, model?, base_url?}
+    成功返回 {success: true, reply}；失败返回 {success: false, message}。
+    """
+    try:
+        from warehouse.llm import create_llm
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'初始化失败: {e}'}), 500
+
+    data = request.get_json(silent=True) or {}
+    provider = str(data.get('provider') or '').strip()
+    api_key = str(data.get('api_key') or '').strip()
+    model = str(data.get('model') or '').strip()
+    base_url = str(data.get('base_url') or '').strip()
+
+    if not provider:
+        return jsonify({'success': False, 'message': '请选择模型提供商'}), 400
+    if not api_key:
+        return jsonify({'success': False, 'message': '请填写 API Key'}), 400
+
+    try:
+        llm = create_llm(provider, {
+            'api_key': api_key,
+            'model': model,
+            'base_url': base_url,
+        })
+    except ValueError as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'创建客户端失败: {e}'}), 500
+
+    try:
+        reply = llm.chat(
+            system_prompt="你是一个健康检查助手。请直接回复 OK，不要多余内容。",
+            user_message="ping",
+        )
+        return jsonify({
+            'success': True,
+            'reply': (reply or '').strip()[:200],
+            'model': getattr(llm, 'model', '') or getattr(llm, 'DEFAULT_MODEL', ''),
+        })
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 400
 

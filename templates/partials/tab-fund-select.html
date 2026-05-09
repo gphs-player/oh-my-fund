@@ -2,7 +2,7 @@
         <div class="card bg-base-300/50 backdrop-blur-sm shadow-xl">
         <div class="card-body">
             <div class="flex flex-wrap items-center justify-between gap-3 mb-2">
-                <h2 class="card-title gradient-text mb-0">基金市场</h2>
+                <h2 class="card-title gradient-text mb-0">基金榜</h2>
                 <div class="flex flex-wrap items-center justify-end gap-2">
                     <button type="button" id="fund-scope-all" class="btn btn-sm btn-primary" onclick="FundSelector.switchScope('all')">全部</button>
                     <button type="button" id="fund-scope-favorite" class="btn btn-sm btn-outline" onclick="FundSelector.switchScope('favorite')">自选</button>
@@ -146,13 +146,14 @@
             </div>
         </div>
 
-        <div id="fund-detail-content" class="hidden">
-            <div role="tablist" class="tabs tabs-bordered bg-transparent mb-3">
-                <a role="tab" class="tab tab-active" data-detail-tab="JJXQ">基金详情</a>
-                <a role="tab" class="tab" data-detail-tab="JDZF">阶段涨幅</a>
-                <a role="tab" class="tab" data-detail-tab="JJGM">基金规模</a>
-                <a role="tab" class="tab" data-detail-tab="JJCC">基金持仓</a>
-            </div>
+            <div id="fund-detail-content" class="hidden">
+                <div role="tablist" class="tabs tabs-bordered bg-transparent mb-3">
+                    <a role="tab" class="tab tab-active" data-detail-tab="JJXQ">基金详情</a>
+                    <a role="tab" class="tab" data-detail-tab="JDZF">阶段涨幅</a>
+                    <a role="tab" class="tab" data-detail-tab="JJGM">基金规模</a>
+                    <a role="tab" class="tab" data-detail-tab="JJCC">基金持仓</a>
+                    <a role="tab" class="tab" data-detail-tab="JJJL">基金经理</a>
+                </div>
 
             <div id="fund-detail-panel-JJXQ" class="fund-detail-panel">
                 <div class="overflow-x-auto">
@@ -172,6 +173,7 @@
                         <thead>
                             <tr>
                                 <th>周期</th>
+                                <th class="text-center">涨幅</th>
                                 <th>同类排名</th>
                             </tr>
                         </thead>
@@ -203,6 +205,25 @@
                     </div>
                 </div>
                 <pre id="fund-detail-jjcc-pre" class="mt-3 text-xs text-slate-200 whitespace-pre-wrap break-words bg-black/20 rounded-xl p-3 border border-white/10 hidden" style="display:none;"></pre>
+            </div>
+
+            <div id="fund-detail-panel-JJJL" class="fund-detail-panel hidden" style="display:none;">
+                <div class="mt-1 overflow-x-auto rounded-2xl border border-white/10 bg-black/15">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>基金经理</th>
+                                <th>任职开始</th>
+                                <th>任职结束</th>
+                                <th class="text-right">任职天数</th>
+                                <th class="text-right">任职回报</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fund-detail-jjjl-body">
+                            <tr><td colspan="5" class="text-slate-400">暂无基金经理数据</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>

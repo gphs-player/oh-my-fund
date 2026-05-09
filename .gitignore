@@ -44,6 +44,7 @@ Thumbs.db
 # Project data layout
 data/cache/
 data/_backup/
+data/funds_list_cache_*.csv
 
 # Git worktrees (local)
 .worktrees/

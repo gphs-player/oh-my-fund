@@ -18,20 +18,32 @@ class BaseDataSource:
 
     def test_connection(self) -> dict:
         try:
-            # 只测试第一页少量数据，避免全量拉取导致慢/超时
-            result = self.get_fund_list(page_num=1, page_size=5)
-            return {"success": True, "message": "连接成功", "count": len(result)}
+            result = self.get_fund_list()
+            return {"success": True, "message": "连接成功", "count": min(len(result), 5)}
         except Exception as e:
             return {"success": False, "message": str(e), "count": 0}
 
-    def get_fund_list(self, page_num: int | None = None, page_size: int | None = None) -> list[dict]:
+    def get_fund_list(self) -> list[dict]:
         raise NotImplementedError("子类必须实现 get_fund_list 方法")
 
-    def get_fund_overview(self, fund_code: str) -> dict[str, str]:
+    def get_fund_overview(self, fund_code: str):
         raise NotImplementedError("子类必须实现 get_fund_overview 方法")
 
     def get_fund_history(self, fund_code: str, start_date: str | None = None, end_date: str | None = None) -> list[dict]:
         raise NotImplementedError("子类必须实现 get_fund_history 方法")
+
+    def get_fund_rank_page(self, page_num: int = 1, page_size: int = 50, fund_type: int = 0) -> tuple[list[dict], int]:
+        """
+        获取基金排名分页数据。
+
+        约定：
+        - page_num/page_size：分页参数
+        - fund_type：基金类型筛选（沿用东财 FundType 枚举，0=全部）
+        - 返回：(items, total)
+        - items 字段建议至少包含：
+          - fund_code, fund_name, percentage（默认口径：日涨跌幅）
+        """
+        raise NotImplementedError("子类必须实现 get_fund_rank_page 方法")
 
     # =====================
     # 实时估值 / 涨跌幅（通用能力，子类可覆盖）
@@ -45,6 +57,12 @@ class BaseDataSource:
             "Chrome/122.0.0.0 Safari/537.36"
         )
     }
+
+    def get_fund_holding_dates(self, fund_code: str) -> list[str]:
+        raise NotImplementedError("子类必须实现 get_fund_holding_dates 方法")
+
+    def get_fund_holdings(self, fund_code: str, report_date: str) -> dict:
+        raise NotImplementedError("子类必须实现 get_fund_holdings 方法")
 
     def get_fund_gz(self, fund_code: str) -> dict:
         code = str(fund_code or "").strip()

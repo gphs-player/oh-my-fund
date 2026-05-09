@@ -20,7 +20,7 @@ class TushareDataSource(BaseDataSource):
         self.password = config.get("password", "")
         # TODO: 初始化 Tushare 客户端
 
-    def get_fund_list(self, page_num: int | None = None, page_size: int | None = None) -> list[dict]:
+    def get_fund_list(self) -> list[dict]:
         """
         获取基金列表
 
@@ -37,3 +37,6 @@ class TushareDataSource(BaseDataSource):
 
     def get_fund_history(self, fund_code: str, start_date: str | None = None, end_date: str | None = None) -> list[dict]:
         raise NotImplementedError("Tushare 基金历史净值接口待实现，请参考 Tushare 文档")
+
+    def get_fund_rank_page(self, page_num: int = 1, page_size: int = 50, fund_type: int = 0) -> tuple[list[dict], int]:
+        raise NotImplementedError("Tushare 基金排名接口待实现，请参考 Tushare 文档")

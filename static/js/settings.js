@@ -4,11 +4,14 @@ const SettingsManager = {
     datasources: [],      // 已配置的数据源
     editingId: null,      // 正在编辑的数据源 ID
     editingType: null,    // 正在编辑的数据源类型
+    llmProviders: [],     // 可用的 LLM 提供商（含 models/default_model/default_base_url）
+    llmTestedKey: null,   // 最近一次测试通过的配置指纹，用于保存时校验
 
     // 初始化
     init: async function() {
         await this.loadDatasourceTypes();
         await this.loadDatasources();
+        await this.loadLlmProviders();
         await this.loadSettings();
         await this.loadCacheInfo();
     },
@@ -116,6 +119,114 @@ const SettingsManager = {
         }).join('');
     },
 
+    // 加载 LLM 提供商列表
+    loadLlmProviders: async function() {
+        try {
+            const response = await fetch('/api/llm/providers');
+            const result = await response.json();
+            if (result.success) {
+                this.llmProviders = result.items || [];
+                this.renderLlmProviderOptions();
+            }
+        } catch (error) {
+            console.error('加载 LLM 提供商失败:', error);
+        }
+    },
+
+    // 渲染提供商下拉
+    renderLlmProviderOptions: function() {
+        const select = document.getElementById('llm-provider');
+        if (!select) return;
+        select.innerHTML = '<option value="">请选择</option>';
+        this.llmProviders.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.type;
+            opt.textContent = p.label;
+            select.appendChild(opt);
+        });
+    },
+
+    // 供应商切换时重置模型字段
+    onLlmProviderChanged: function() {
+        const provider = document.getElementById('llm-provider').value;
+        const hintEl = document.getElementById('llm-model-hint');
+        const baseUrlHint = document.getElementById('llm-base-url-hint');
+        this.llmTestedKey = null;
+        this.setLlmStatus('');
+
+        const cb = this.getLlmModelCombobox();
+        if (cb) {
+            cb.setOptions([]);
+            cb.setValue('');
+        }
+
+        if (!provider) {
+            if (hintEl) hintEl.textContent = '';
+            if (baseUrlHint) baseUrlHint.textContent = '';
+            return;
+        }
+
+        const info = this.llmProviders.find(p => p.type === provider);
+        if (hintEl) hintEl.textContent = info && info.default_model ? '默认: ' + info.default_model : '';
+        if (baseUrlHint) baseUrlHint.textContent = info && info.default_base_url ? '默认: ' + info.default_base_url : '';
+    },
+
+    // 获取模型下拉 combobox 实例
+    getLlmModelCombobox: function() {
+        const root = document.getElementById('llm-model-combobox');
+        // 注意：combobox.js 里使用 `const Combobox = {...}` 声明，不一定会挂到 window.Combobox
+        // 这里用 `typeof` 判断，避免因 window.Combobox 不存在导致无法初始化下拉控件
+        if (!root || typeof Combobox === 'undefined') return null;
+        return Combobox.get(root) || Combobox.attach(root);
+    },
+
+    // 从供应商动态拉取模型列表
+    fetchLlmModels: async function() {
+        const provider = document.getElementById('llm-provider').value.trim();
+        const apiKey = document.getElementById('llm-api-key').value.trim();
+        const baseUrl = document.getElementById('llm-base-url').value.trim();
+
+        if (!provider) {
+            showToast('请先选择模型提供商', 'warning');
+            return;
+        }
+        if (!apiKey) {
+            showToast('请先填写 API Key', 'warning');
+            return;
+        }
+
+        this.setLlmStatus('正在拉取模型列表...', 'info');
+        try {
+            const response = await fetch('/api/llm/models', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ provider, api_key: apiKey, base_url: baseUrl })
+            });
+            const result = await response.json();
+            if (!result.success) {
+                this.setLlmStatus('获取模型列表失败: ' + (result.message || '未知错误'), 'error');
+                showToast('获取模型列表失败: ' + (result.message || '未知错误'), 'error');
+                return;
+            }
+
+            const models = result.models || [];
+            const cb = this.getLlmModelCombobox();
+            if (cb) {
+                cb.setOptions(models);
+                if (!cb.getValue() && result.default_model && models.includes(result.default_model)) {
+                    cb.setValue(result.default_model);
+                }
+                cb.open();
+            }
+
+            this.setLlmStatus(`已拉取 ${models.length} 个模型 ✓`, 'success');
+            showToast(`获取到 ${models.length} 个模型`, 'success');
+        } catch (error) {
+            this.setLlmStatus('获取模型列表失败: ' + error.message, 'error');
+            showToast('获取模型列表失败: ' + error.message, 'error');
+        }
+    },
+
     // 加载全局设置
     loadSettings: async function() {
         try {
@@ -125,8 +236,152 @@ const SettingsManager = {
             if (expireInput && settings.cache_expire_days) {
                 expireInput.value = settings.cache_expire_days;
             }
+
+            // LLM 配置
+            const providerEl = document.getElementById('llm-provider');
+            const apiKeyEl = document.getElementById('llm-api-key');
+            const baseUrlEl = document.getElementById('llm-base-url');
+            const periodsEl = document.getElementById('ai-holding-periods');
+
+            if (providerEl) providerEl.value = settings.llm_provider || '';
+            // 根据 provider 重置提示，再回填模型名
+            this.onLlmProviderChanged();
+            const cb = this.getLlmModelCombobox();
+            if (cb) cb.setValue(settings.llm_model || '');
+
+            if (apiKeyEl) apiKeyEl.value = settings.llm_api_key || '';
+            if (baseUrlEl) baseUrlEl.value = settings.llm_base_url || '';
+            if (periodsEl) periodsEl.value = settings.ai_holding_periods || '';
+
+            // 已保存过的配置，视为可直接再次保存（但修改字段后会失效）
+            if (settings.llm_provider && settings.llm_api_key) {
+                this.llmTestedKey = this.currentLlmFingerprint();
+            }
         } catch (error) {
             console.error('加载设置失败:', error);
+        }
+    },
+
+    // 当前 LLM 配置指纹
+    currentLlmFingerprint: function() {
+        const provider = (document.getElementById('llm-provider') || {}).value || '';
+        const apiKey = (document.getElementById('llm-api-key') || {}).value || '';
+        const model = (document.getElementById('llm-model') || {}).value || '';
+        const baseUrl = (document.getElementById('llm-base-url') || {}).value || '';
+        return [provider, apiKey, model, baseUrl].join('|');
+    },
+
+    setLlmStatus: function(text, kind) {
+        const el = document.getElementById('llm-config-status');
+        if (!el) return;
+        el.textContent = text || '';
+        el.className = 'text-sm ' + (
+            kind === 'success' ? 'text-success'
+            : kind === 'error' ? 'text-error'
+            : kind === 'warning' ? 'text-warning'
+            : 'text-slate-300'
+        );
+    },
+
+    // 测试 LLM 配置连接
+    testLlmConfig: async function() {
+        const provider = document.getElementById('llm-provider').value.trim();
+        const apiKey = document.getElementById('llm-api-key').value.trim();
+        const model = document.getElementById('llm-model').value.trim();
+        const baseUrl = document.getElementById('llm-base-url').value.trim();
+
+        if (!provider) {
+            showToast('请选择模型提供商', 'warning');
+            return false;
+        }
+        if (!apiKey) {
+            showToast('请输入 API Key', 'warning');
+            return false;
+        }
+
+        this.setLlmStatus('测试中...', 'info');
+        try {
+            const response = await fetch('/api/llm/test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ provider, api_key: apiKey, model, base_url: baseUrl })
+            });
+            const result = await response.json();
+            if (result.success) {
+                this.llmTestedKey = this.currentLlmFingerprint();
+                const reply = result.reply ? `（回复: ${result.reply}）` : '';
+                this.setLlmStatus('连接成功 ✓ ' + reply, 'success');
+                showToast('连接成功，可以保存', 'success');
+                return true;
+            } else {
+                this.llmTestedKey = null;
+                this.setLlmStatus('连接失败: ' + (result.message || '未知错误'), 'error');
+                showToast('连接失败: ' + (result.message || '未知错误'), 'error');
+                return false;
+            }
+        } catch (error) {
+            this.llmTestedKey = null;
+            this.setLlmStatus('测试失败: ' + error.message, 'error');
+            showToast('测试失败: ' + error.message, 'error');
+            return false;
+        }
+    },
+
+    // 保存 LLM 配置
+    saveLlmConfig: async function() {
+        const provider = document.getElementById('llm-provider').value.trim();
+        const apiKey = document.getElementById('llm-api-key').value.trim();
+        const model = document.getElementById('llm-model').value.trim();
+        const baseUrl = document.getElementById('llm-base-url').value.trim();
+        const periodsStr = document.getElementById('ai-holding-periods').value.trim();
+
+        if (!provider) {
+            showToast('请选择模型提供商', 'warning');
+            return;
+        }
+        if (!apiKey) {
+            showToast('请输入 API Key', 'warning');
+            return;
+        }
+
+        // 保存前要求先测试通过当前配置
+        if (this.llmTestedKey !== this.currentLlmFingerprint()) {
+            const ok = await this.testLlmConfig();
+            if (!ok) return;
+        }
+
+        let periods = 8;
+        if (periodsStr) {
+            const n = parseInt(periodsStr);
+            if (isNaN(n) || n < 1 || n > 40) {
+                showToast('持仓期数需在 1-40 之间', 'warning');
+                return;
+            }
+            periods = n;
+        }
+
+        try {
+            const response = await fetch('/api/settings', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    llm_provider: provider,
+                    llm_api_key: apiKey,
+                    llm_model: model,
+                    llm_base_url: baseUrl,
+                    ai_holding_periods: String(periods),
+                })
+            });
+            const result = await response.json();
+            if (result.success) {
+                showToast('AI 配置已保存', 'success');
+                this.setLlmStatus('已保存 ✓', 'success');
+                setTimeout(() => { this.setLlmStatus(''); }, 3000);
+            } else {
+                showToast('保存失败', 'error');
+            }
+        } catch (error) {
+            showToast('保存失败: ' + error.message, 'error');
         }
     },
 
@@ -342,7 +597,7 @@ const SettingsManager = {
             if (result.success) {
                 showToast('激活成功', 'success');
                 await this.loadDatasources();
-                // 通知基金市场模块：数据源已切换，需要重新拉取类型与列表
+                // 通知基金榜模块：数据源已切换，需要重新拉取类型与列表
                 if (window.FundSelector && typeof window.FundSelector.onDatasourceChanged === 'function') {
                     await window.FundSelector.onDatasourceChanged();
                 }
@@ -362,7 +617,7 @@ const SettingsManager = {
             if (result.success) {
                 showToast('已停用', 'success');
                 await this.loadDatasources();
-                // 通知基金市场模块：数据源已切换，需要重新拉取类型与列表
+                // 通知基金榜模块：数据源已切换，需要重新拉取类型与列表
                 if (window.FundSelector && typeof window.FundSelector.onDatasourceChanged === 'function') {
                     await window.FundSelector.onDatasourceChanged();
                 }
@@ -478,4 +733,10 @@ const SettingsManager = {
 // 页面加载时初始化
 document.addEventListener('DOMContentLoaded', function() {
     SettingsManager.init();
+
+    // LLM 配置字段变化时清除测试指纹
+    ['llm-api-key', 'llm-model', 'llm-base-url'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', () => { SettingsManager.llmTestedKey = null; SettingsManager.setLlmStatus(''); });
+    });
 });

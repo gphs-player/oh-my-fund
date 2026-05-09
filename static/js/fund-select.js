@@ -32,6 +32,12 @@ const FundSelector = {
     init: function() {
         this.bindEvents();
         this.render();
+
+        // 兼容主 Tab 使用 hash 路由：刷新在 #fund-select 时应自动加载数据
+        // （否则用户未触发点击事件，会一直看到“暂无基金数据”的占位文案）
+        if (window.location.hash === '#fund-select') {
+            void this.loadIfNeeded();
+        }
     },
 
     bindEvents: function() {
@@ -503,7 +509,7 @@ const FundSelector = {
         this.currentPage = 1;
         this.searchKeyword = '';
 
-        // 如果当前就在基金市场 Tab，立即触发重载；否则等待用户下次点击 Tab 再加载
+        // 如果当前就在基金榜 Tab，立即触发重载；否则等待用户下次点击 Tab 再加载
         const fundTab = document.querySelector('[data-tab="fund-select"]');
         const isActive = fundTab && fundTab.classList.contains('tab-active');
         if (isActive) {
@@ -865,7 +871,7 @@ const FundSelector = {
                                 <span class="favorite-btn-icon ${this.isFavorite(item.fund_code) ? 'is-active' : ''}">${this.isFavorite(item.fund_code) ? '★' : '☆'}</span>
                             </button>
                         </div>
-                        ${this.isFavorite(item.fund_code) ? `
+                        ${(this.selectedScope === 'favorite' && this.isFavorite(item.fund_code)) ? `
                         <div class="tooltip" data-tip="分组">
                             <button type="button" class="btn btn-outline btn-xs fund-action-group" onclick="FundSelector.showAssignGroupModal('${item.fund_code || ''}')" title="分组">分组</button>
                         </div>
@@ -1158,7 +1164,7 @@ const FundSelector = {
         const tabs = document.querySelectorAll('[data-detail-tab]');
         tabs.forEach(t => t.classList.toggle('tab-active', t.dataset.detailTab === tabKey));
 
-        const panels = ['JJXQ', 'JDZF', 'JJGM', 'JJCC'];
+        const panels = ['JJXQ', 'JDZF', 'JJGM', 'JJCC', 'JJJL'];
         panels.forEach(key => {
             const el = document.getElementById(`fund-detail-panel-${key}`);
             if (!el) return;
@@ -1351,7 +1357,7 @@ const FundSelector = {
             });
         }
 
-        const groups = { JJXQ: [], JDZF: [], JJGM: [], JJCC: [] };
+        const groups = { JJXQ: [], JDZF: [], JJGM: [], JJCC: [], JJJL: [] };
         this.detailItems.forEach(item => {
             const section = (item && item.section) ? String(item.section) : 'JJXQ';
             if (!groups[section]) groups[section] = [];
@@ -1387,6 +1393,7 @@ const FundSelector = {
 
         const jjgmRaw = (groups.JJGM || []).find(x => x && x.key === 'raw');
         const jjccRaw = (groups.JJCC || []).find(x => x && x.key === 'raw');
+        const jjjlRaw = (groups.JJJL || []).find(x => x && x.key === 'raw');
         jjgmPre.textContent = jjgmRaw ? (jjgmRaw.value || '') : '';
         jjccPre.textContent = jjccRaw ? (jjccRaw.value || '') : '';
 
@@ -1399,6 +1406,11 @@ const FundSelector = {
         const jjccPieModels = this.buildJjccPieModels(jjccRaw ? (jjccRaw.value || '') : '');
         this._lastJjccPieModels = jjccPieModels;
         this.renderJjccPies(jjccPieModels, { stock: jjccStockCanvas, asset: jjccAssetCanvas, sector: jjccSectorCanvas });
+
+        // JJJL：基金经理（表格）
+        const jjjlBody = document.getElementById('fund-detail-jjjl-body');
+        const jjjlModel = this.buildJjjlModel(jjjlRaw ? (jjjlRaw.value || '') : '');
+        this.renderJjjlTable(jjjlModel, jjjlBody);
 
         // 默认展示 JJXQ
         this.switchDetailTab('JJXQ');
@@ -1613,6 +1625,54 @@ const FundSelector = {
             asset: { labels: assetLabels, values: assetValues },
             sector: { labels: sectorLabels, values: sectorValues },
         };
+    },
+
+    buildJjjlModel: function(rawText) {
+        if (!rawText || rawText === '--') return [];
+        let payload = null;
+        try { payload = JSON.parse(rawText); } catch (e) { return []; }
+        const rows = payload && payload.Datas;
+        const list = Array.isArray(rows) ? rows : [];
+        const normalizeText = (v) => {
+            const s = String(v === undefined || v === null ? '' : v).trim();
+            return (!s || s === '--') ? '' : s;
+        };
+        const normalizeNum = (v) => {
+            const s = normalizeText(v);
+            if (!s) return null;
+            const n = Number(String(s).replace('%', '').trim());
+            return Number.isFinite(n) ? n : null;
+        };
+
+        return list.map(it => {
+            const mgrName = normalizeText(it.MGRNAME || it.mgr_name || it.manager_name || '');
+            const start = normalizeText(it.FEMPDATE || it.fempdate || it.start_date || '');
+            const end = normalizeText(it.LEMPDATE || it.lempdate || it.end_date || '');
+            const days = normalizeNum(it.DAYS || it.days);
+            const growth = normalizeNum(it.PENAVGROWTH || it.penavgrowth || it.growth);
+            return { mgrName, startDate: start, endDate: end, days, growth };
+        });
+    },
+
+    renderJjjlTable: function(model, tbodyEl) {
+        if (!tbodyEl) return;
+        const rows = Array.isArray(model) ? model.filter(x => x && (x.mgrName || x.startDate || x.endDate)) : [];
+        if (!rows.length) {
+            tbodyEl.innerHTML = '<tr><td colspan="5" class="text-slate-400">暂无基金经理数据</td></tr>';
+            return;
+        }
+        const fmtDays = (n) => (typeof n === 'number' && Number.isFinite(n)) ? String(Math.round(n)) : '-';
+        const fmtPct = (n) => (typeof n === 'number' && Number.isFinite(n)) ? `${n.toFixed(2)}%` : '-';
+        const fmtEnd = (s) => s ? s : '至今';
+        tbodyEl.innerHTML = rows.map(r => `
+            <tr>
+                <td class="text-slate-100">${r.mgrName || '-'}</td>
+                <td class="text-slate-200">${r.startDate || '-'}</td>
+                <td class="text-slate-200">${fmtEnd(r.endDate)}</td>
+                <td class="text-right text-slate-200">${fmtDays(r.days)}</td>
+                <td class="text-right text-slate-200">${fmtPct(r.growth)}</td>
+            </tr>
+        `).join('');
     },
 
     renderJjccPies: function(models, canvasMap) {
@@ -1926,12 +1986,21 @@ const FundSelector = {
     renderJdzfRankTable: function(model, tbodyEl) {
         if (!tbodyEl) return;
         const rows = (model && model.rankRows) ? model.rankRows : [];
-        tbodyEl.innerHTML = rows.map(r => `
-            <tr>
+        const fundValues = (model && model.fund) ? model.fund : [];
+        tbodyEl.innerHTML = rows.map((r, i) => {
+            const val = fundValues[i];
+            let changeText = '-';
+            let colorStyle = '';
+            if (val !== null && val !== undefined) {
+                changeText = (val >= 0 ? '+' : '') + val.toFixed(2) + '%';
+                colorStyle = val > 0 ? 'color:#ef4444;' : val < 0 ? 'color:#22c55e;' : '';
+            }
+            return `<tr>
                 <td>${r.name}</td>
+                <td class="text-center"><span class="inline-block text-right" style="min-width:5rem;${colorStyle}">${changeText}</span></td>
                 <td>${r.rankText || '-'}</td>
-            </tr>
-        `).join('');
+            </tr>`;
+        }).join('');
     },
 
     addToInvestment: function(fundCode) {

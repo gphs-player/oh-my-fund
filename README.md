@@ -5,9 +5,10 @@
 当前项目已经不只是计算器，核心能力包括：
 
 - 我的持仓管理
-- 基金市场（全部 / 自选 / 分组）
+- 基金榜（全部 / 自选 / 分组）
 - 策略列表 + 独立策略详情页
 - 基于基金历史净值的策略分析
+- AI 选基（基于 LLM 的一键基金分析，带进度展示）
 - 数据源管理与缓存（基金列表 + 历史净值）
 - 年化 / 复利计算器
 
@@ -22,9 +23,9 @@
 - 仓位占比与汇总
 - 图表分析：按板块 / 风险等级 / 持有计划
 - 市场管理
-- 从基金市场一键带入“添加持仓”弹框
+- 从基金榜一键带入“添加持仓”弹框
 
-### 2. 基金市场
+### 2. 基金榜
 
 - 懒加载基金列表（`/api/funds`，服务端分页：`pageNum/pageSize`）
 - 搜索（`q`）、类型筛选（`fund_type_code`）、分页
@@ -83,6 +84,10 @@
 - 数据源新增 / 编辑 / 删除 / 启停 / 测试
 - 缓存过期天数设置
 - 基金列表缓存状态查看与手动刷新
+- AI 模型配置：
+  - 选择提供商（Claude / DeepSeek / OpenAI）
+  - 动态拉取模型列表并下拉选择
+  - 测试连接与保存配置
 
 ---
 
@@ -111,7 +116,15 @@
 - 历史净值缓存与基金列表缓存分离：
   - 基金列表缓存按 `cache_expire_days`
   - 历史净值缓存仅当天有效
-- 基金市场新增“分享”功能：将当前页基金列表渲染为 1080×1920 海报图片（iframe 隔离避免 oklch，背景高斯模糊在 Canvas 内烘焙），并在底部附加二维码用于个人宣传
+- 基金榜新增“分享”功能：将当前页基金列表渲染为 1080×1920 海报图片（iframe 隔离避免 oklch，背景高斯模糊在 Canvas 内烘焙），并在底部附加二维码用于个人宣传
+- 设置页 AI 模型“模型名称”下拉框改为自定义 combobox，支持动态拉取模型列表并可搜索选择
+- 新增基金关键字搜索接口：`GET /api/funds/search?q=...&limit=...`
+  - 数据源来自东方财富 `fundcode_search.js`
+  - 缓存有效期截至“最近一个 15:00”（15:00 前到今日 15:00；15:00 后到次日 15:00）
+- AI 选基交互优化：
+  - 从自选点选仅回填基金代码，不自动触发分析
+  - 分析流程改为异步任务 + 轮询进度，前端展示步骤进度条
+  - AI 选基输入框支持关键字联想（防抖），添加持仓弹框支持名称/代码联想（防抖）
 
 ---
 
@@ -145,18 +158,25 @@ python3 app.py
 
 ## 数据与持久化
 
-所有数据默认写入项目目录下的 `data/`：
+所有数据默认写入项目目录下的 `data/`，并按“业务数据 / 缓存”分目录管理：
 
-- `markets.csv`：市场列表
-- `investments.csv`：持仓数据
-- `favorites.csv`：自选基金主表
-- `favorite_groups.csv`：自选分组定义
-- `favorite_group_memberships.csv`：自选基金分组关系
-- `datasources.csv`：数据源配置
-- `settings.csv`：全局设置
-- `strategies.csv`：策略记录（支持单策略或多策略组合）
-- `funds_list_cache_YYYY_MM_DD.csv`：基金列表缓存
-- `fund_history_cache_<fund_code>_YYYY_MM_DD.csv`：基金历史净值当日缓存
+### 业务数据（会持久化，建议备份）：`data/store/`
+
+- `data/store/markets.csv`：市场列表
+- `data/store/investments.csv`：持仓数据
+- `data/store/favorites.csv`：自选基金主表
+- `data/store/favorite_groups.csv`：自选分组定义
+- `data/store/favorite_group_memberships.csv`：自选基金分组关系
+- `data/store/datasources.csv`：数据源配置
+- `data/store/settings.csv`：全局设置
+- `data/store/strategies.csv`：策略记录（支持单策略或多策略组合）
+
+### 缓存（可删除重建，不建议备份）：`data/cache/`
+
+- `data/cache/funds_list/YYYY_MM_DD.csv`：基金列表缓存
+- `data/cache/fund_history_value/<fund_code>/YYYY_MM_DD.csv`：基金历史净值当日缓存
+（已移除）基金关键字搜索缓存目录（原 `data/cache/fund_search/`）：搜索接口已改为基于基金列表缓存，不再使用该缓存逻辑。
+- `data/cache/ai_analysis/<fund_code>/YYYYMMDD_1500.csv`：AI 分析缓存（文件名体现截止时间点 15:00）
 
 ---
 
@@ -187,9 +207,10 @@ python3 app.py
 - 东方财富基金历史净值
 - 东方财富实时估值
 
-新增数据源：
+说明：
 
-- `eastmoney_mob`：东方财富手机接口（基金列表分页 + 基金类型 + 基金详情四块）
+- 已移除“东方财富手机接口（eastmoney_mob）”作为可选数据源；
+- 基金榜列表接口改为 Default 数据源内置的“基金排名”能力（按日涨跌幅排序），并沿用东财 FundType 枚举做筛选。
 
 `lixinger` / `tushare` 目前仍是适配器占位，未接入真实历史净值与基金列表能力。
 
@@ -238,10 +259,17 @@ python3 app.py
 
 - `GET /api/funds`
 - `GET /api/funds/types`
+- `GET /api/funds/search`（关键字搜索基金，匹配 code/name，数据来源为基金列表接口缓存）
 - `GET /api/funds/<fund_code>/overview`
 - `GET /api/funds/<fund_code>/history`
 - `GET /api/funds/<fund_code>/gz`
 - `GET /api/funds/gz`
+
+### AI 选基
+
+- `POST /api/funds/<fund_code>/ai-analysis`（兼容旧逻辑：同步分析）
+- `POST /api/funds/<fund_code>/ai-analysis/jobs`（推荐：创建异步任务，返回 job_id）
+- `GET /api/ai-analysis/jobs/<job_id>`（查询进度与结果）
 
 ### 策略
 
@@ -277,6 +305,8 @@ fund-calculator/
 ├── warehouse/
 │   ├── repository.py
 │   ├── cache.py
+│   ├── analysis/                # AI 分析编排（量化指标 + LLM）
+│   ├── llm/                     # LLM 适配（Claude/DeepSeek/OpenAI）
 │   └── adapters/
 ├── templates/
 │   ├── index.html               # 首页
@@ -286,8 +316,10 @@ fund-calculator/
 │   ├── css/style.css
 │   └── js/
 │       ├── utils.js
+│       ├── combobox.js
 │       ├── investment.js
 │       ├── fund-select.js
+│       ├── ai-pick.js
 │       ├── strategy.js          # 首页策略列表逻辑
 │       ├── strategy-detail.js   # 策略详情页逻辑
 │       ├── annualized.js
@@ -347,11 +379,17 @@ document.addEventListener('DOMContentLoaded', function() {
 - 导出：交易信号 CSV / 交易明细 CSV / 诊断 JSON 均可下载
 - 颜色语义：红=买入/上涨/盈利，绿=卖出/下跌/亏损
 
-### 基金市场
+### 基金榜
 
 - 全部 / 自选视图切换正常
 - 自选分组新增 / 重命名 / 删除正常
 - 基金详情弹层正常
+
+### AI 选基
+
+- 输入基金代码：联想下拉可用（防抖）
+- 从自选点击：仅回填代码，不自动分析
+- 点击“开始分析”后：进度条与步骤推进正常，完成后展示评分与因子卡片
 
 ---
 

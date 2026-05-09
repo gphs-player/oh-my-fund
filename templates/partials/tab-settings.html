@@ -79,7 +79,83 @@
                 </div>
             </div>
         </div>
-        
+
+        <!-- AI 模型配置 -->
+        <div class="card neon-border">
+            <div class="card-body">
+                <h2 class="card-title text-lg mb-4">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                    </svg>
+                    AI 模型配置（用于「AI 选基」）
+                </h2>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">模型提供商</span></label>
+                        <select id="llm-provider" class="select select-bordered select-sm" onchange="SettingsManager.onLlmProviderChanged()">
+                            <option value="">请选择</option>
+                        </select>
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">API Key</span></label>
+                        <input type="password" id="llm-api-key" class="input input-bordered input-sm" placeholder="sk-...">
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">模型名称</span>
+                            <span id="llm-model-hint" class="label-text-alt text-slate-400"></span>
+                        </label>
+                        <div class="flex gap-2">
+                            <div id="llm-model-combobox" class="combobox flex-1" data-combobox>
+                                <div class="combobox-control">
+                                    <input type="text" id="llm-model" class="combobox-input" autocomplete="off"
+                                           placeholder="填 API Key 后点右侧按钮获取" aria-autocomplete="list"
+                                           aria-controls="llm-model-menu" aria-expanded="false" role="combobox">
+                                    <button type="button" class="combobox-clear" tabindex="-1" title="清除" aria-label="清除">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
+                                        </svg>
+                                    </button>
+                                    <button type="button" class="combobox-caret" tabindex="-1" aria-label="展开">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                                <ul id="llm-model-menu" class="combobox-menu" role="listbox"></ul>
+                            </div>
+                            <button type="button" class="btn btn-outline btn-sm" onclick="SettingsManager.fetchLlmModels()">获取</button>
+                        </div>
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">Base URL（可选）</span>
+                            <span id="llm-base-url-hint" class="label-text-alt text-slate-400"></span>
+                        </label>
+                        <input type="text" id="llm-base-url" class="input input-bordered input-sm" placeholder="自定义 API 端点">
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">分析持仓期数</span>
+                            <span class="label-text-alt text-slate-400">默认 8（约 2 年）</span>
+                        </label>
+                        <input type="number" id="ai-holding-periods" class="input input-bordered input-sm" min="1" max="40" placeholder="8">
+                    </div>
+                </div>
+
+                <div class="mt-4 flex items-center gap-2 flex-wrap">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="SettingsManager.testLlmConfig()">测试连接</button>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="SettingsManager.saveLlmConfig()">保存配置</button>
+                    <span id="llm-config-status" class="text-sm text-slate-300"></span>
+                </div>
+            </div>
+        </div>
+
     </div>
 </div>
 

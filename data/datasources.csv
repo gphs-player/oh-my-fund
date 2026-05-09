@@ -1,3 +1,0 @@
-id,name,type,config,is_active
-3,默认数据源,Default,{},false
-4,东财API,EastMoneyMob,{},true

@@ -8,17 +8,17 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from .cache import FundCache, FundHistoryCache
 from .adapters.factory import create_datasource
 from .adapters.base import BaseDataSource
+from .paths import STORE_DIR, ensure_dirs
 
 
 class FundRepository:
     """基金数据仓库 - 统一入口，外层调用无感知底层数据源"""
 
-    DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
-    DATASOURCES_FILE = os.path.join(DATA_DIR, "datasources.csv")
-    SETTINGS_FILE = os.path.join(DATA_DIR, "settings.csv")
+    DATASOURCES_FILE = os.path.join(STORE_DIR, "datasources.csv")
+    SETTINGS_FILE = os.path.join(STORE_DIR, "settings.csv")
 
     def __init__(self):
-        self._ensure_data_dir()
+        ensure_dirs()
         self.cache = FundCache()
         self.history_cache = FundHistoryCache()
         # Default 数据源作为兜底（始终可用）
@@ -61,11 +61,6 @@ class FundRepository:
                     f"{op_name}失败：主数据源({primary_type})异常: {primary_exc}；Default重试异常: {default_exc}"
                 ) from default_exc
 
-    def _ensure_data_dir(self):
-        """确保数据目录存在"""
-        if not os.path.exists(self.DATA_DIR):
-            os.makedirs(self.DATA_DIR)
-
     def _load_active_datasource(self) -> BaseDataSource | None:
         """加载激活的数据源"""
         if not os.path.exists(self.DATASOURCES_FILE):
@@ -75,8 +70,15 @@ class FundRepository:
             reader = csv.DictReader(f)
             for row in reader:
                 if row["is_active"] == "true":
-                    config = json.loads(row["config"])
-                    return create_datasource(row["type"], config)
+                    try:
+                        config = json.loads(row["config"])
+                    except Exception:
+                        config = {}
+                    try:
+                        return create_datasource(row["type"], config)
+                    except Exception:
+                        # 兼容旧数据源类型已下线的情况：忽略并继续
+                        return None
         return None
 
     def _get_expire_days(self) -> int:
@@ -162,7 +164,7 @@ class FundRepository:
             })
         return normalized
 
-    def get_fund_overview(self, fund_code: str) -> dict[str, str]:
+    def get_fund_overview(self, fund_code: str):
         """
         获取单只基金基本信息
 
@@ -238,6 +240,22 @@ class FundRepository:
             self._gz_cache = {}
         except Exception:
             pass
+
+    def get_fund_holding_dates(self, fund_code: str) -> list[str]:
+        """获取基金持仓公布日期列表（委托 Default 数据源）"""
+        return self._call_with_default_fallback(
+            "获取持仓日期",
+            primary_fn=lambda: self.datasource.get_fund_holding_dates(fund_code),  # type: ignore[union-attr]
+            default_fn=lambda: self.default_datasource.get_fund_holding_dates(fund_code),
+        )
+
+    def get_fund_holdings(self, fund_code: str, report_date: str) -> dict:
+        """获取基金某日期的持仓明细（委托 Default 数据源）"""
+        return self._call_with_default_fallback(
+            "获取持仓明细",
+            primary_fn=lambda: self.datasource.get_fund_holdings(fund_code, report_date),  # type: ignore[union-attr]
+            default_fn=lambda: self.default_datasource.get_fund_holdings(fund_code, report_date),
+        )
 
     # =====================
     # 实时估值 / 涨跌幅

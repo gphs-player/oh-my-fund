@@ -571,6 +571,14 @@ body {
 .fund-detail-modal-box #fund-detail-content.fund-detail-content-scroll {
     overflow-y: auto;
     padding-right: 2px; /* 避免滚动条压住内容 */
+    /* 隐藏滚动条外观，但保留滚动能力 */
+    scrollbar-width: none;          /* Firefox */
+    -ms-overflow-style: none;       /* IE/Edge (legacy) */
+}
+
+.fund-detail-modal-box #fund-detail-content.fund-detail-content-scroll::-webkit-scrollbar {
+    width: 0;
+    height: 0;
 }
 
 .fund-detail-modal-box #fund-detail-content > .tabs {
@@ -775,4 +783,137 @@ body {
     .strategy-tab-layout {
         grid-template-columns: 1fr;
     }
+}
+
+/* ===== Combobox 自定义下拉 ===== */
+.combobox {
+    position: relative;
+}
+
+.combobox-control {
+    display: flex;
+    align-items: center;
+    border: 1px solid rgba(129, 140, 248, 0.35);
+    border-radius: 0.375rem;
+    background: rgba(30, 30, 50, 0.8);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.combobox-control:focus-within {
+    border-color: #818cf8;
+    box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.25);
+}
+
+.combobox-input {
+    flex: 1;
+    min-width: 0;
+    padding: 0.375rem 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #e2e8f0;
+}
+
+.combobox-input::placeholder {
+    color: #64748b;
+}
+
+.combobox-clear,
+.combobox-caret {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: #94a3b8;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color 0.15s;
+}
+
+.combobox-clear:hover,
+.combobox-caret:hover {
+    color: #e2e8f0;
+}
+
+.combobox-clear svg,
+.combobox-caret svg {
+    width: 0.875rem;
+    height: 0.875rem;
+}
+
+.combobox-clear[hidden] {
+    display: none;
+}
+
+.combobox-caret {
+    margin-right: 0.25rem;
+    transition: transform 0.2s, color 0.15s;
+}
+
+.combobox[data-open] .combobox-caret {
+    transform: rotate(180deg);
+}
+
+.combobox-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 50;
+    max-height: 14rem;
+    overflow-y: auto;
+    margin: 0;
+    padding: 0.25rem 0;
+    list-style: none;
+    border: 1px solid rgba(129, 140, 248, 0.35);
+    border-radius: 0.375rem;
+    background: rgba(26, 26, 46, 0.97);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.combobox[data-open] .combobox-menu {
+    display: block;
+}
+
+.combobox-menu:empty::after {
+    content: '暂无数据';
+    display: block;
+    padding: 0.5rem 0.75rem;
+    color: #64748b;
+    font-size: 0.8125rem;
+}
+
+.combobox-option {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8125rem;
+    color: #cbd5e1;
+    cursor: pointer;
+    border-radius: 0.25rem;
+    margin: 0 0.25rem;
+    transition: background 0.12s, color 0.12s;
+}
+
+.combobox-option[data-active] {
+    background: rgba(129, 140, 248, 0.2);
+    color: #e2e8f0;
+}
+
+.combobox-option[data-selected] {
+    color: #818cf8;
+    font-weight: 500;
+}
+
+.combobox-option mark {
+    background: rgba(129, 140, 248, 0.35);
+    color: inherit;
+    border-radius: 2px;
+    padding: 0 1px;
 }

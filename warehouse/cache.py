@@ -4,12 +4,14 @@ import csv
 from datetime import datetime, timedelta
 from glob import glob
 
+from .paths import CACHE_FUNDS_LIST_DIR, CACHE_FUND_HISTORY_VALUE_DIR
+
 
 class FundCache:
     """基金列表缓存：内存 + CSV"""
 
-    CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
-    CACHE_PREFIX = "funds_list_cache_"
+    # 目录已能表达语义，文件名仅保留 YYYY_MM_DD.csv
+    CACHE_DIR = CACHE_FUNDS_LIST_DIR
     # 兼容：历史缓存文件可能仅包含 fund_code/fund_name，或不包含新增字段
     CACHE_FIELDS = [
         "fund_code",
@@ -32,15 +34,18 @@ class FundCache:
 
     def _get_cache_file(self) -> str | None:
         """查找缓存文件"""
-        pattern = os.path.join(self.CACHE_DIR, f"{self.CACHE_PREFIX}*.csv")
+        pattern = os.path.join(self.CACHE_DIR, "*.csv")
         files = glob(pattern)
-        return files[0] if files else None
+        if not files:
+            return None
+        files.sort(key=lambda p: self._parse_cache_date(p))
+        return files[-1]
 
     def _parse_cache_date(self, filepath: str) -> datetime:
         """从文件名解析日期"""
-        # funds_list_cache_2026_02_28.csv -> 2026-02-28
-        filename = os.path.basename(filepath)
-        date_str = filename.replace(self.CACHE_PREFIX, "").replace(".csv", "")
+        # 2026_02_28.csv -> 2026-02-28
+        filename = os.path.basename(filepath).replace(".csv", "")
+        date_str = filename
         return datetime.strptime(date_str, "%Y_%m_%d")
 
     def _is_expired(self, filepath: str, expire_days: int) -> bool:
@@ -84,13 +89,15 @@ class FundCache:
             data: 基金列表数据
         """
         # 1. 删除旧文件
-        old_file = self._get_cache_file()
-        if old_file:
-            os.remove(old_file)
+        for fp in glob(os.path.join(self.CACHE_DIR, "*.csv")):
+            try:
+                os.remove(fp)
+            except Exception:
+                pass
 
         # 2. 写入新文件
         date_str = datetime.now().strftime("%Y_%m_%d")
-        filepath = os.path.join(self.CACHE_DIR, f"{self.CACHE_PREFIX}{date_str}.csv")
+        filepath = os.path.join(self.CACHE_DIR, f"{date_str}.csv")
         self._write_csv(filepath, data)
 
         # 3. 更新内存
@@ -99,9 +106,11 @@ class FundCache:
     def clear(self):
         """清空缓存（内存 + CSV）"""
         FundCache._memory_cache = None
-        cache_file = self._get_cache_file()
-        if cache_file:
-            os.remove(cache_file)
+        for fp in glob(os.path.join(self.CACHE_DIR, "*.csv")):
+            try:
+                os.remove(fp)
+            except Exception:
+                pass
 
     def get_cache_info(self) -> dict:
         """
@@ -166,8 +175,8 @@ class FundCache:
 class FundHistoryCache:
     """基金历史净值缓存：内存 + CSV，仅当天有效"""
 
-    CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
-    CACHE_PREFIX = "fund_history_cache_"
+    # 目录已能表达语义：cache/fund_history_value/<fund_code>/YYYY_MM_DD.csv
+    CACHE_DIR = CACHE_FUND_HISTORY_VALUE_DIR
     CACHE_FIELDS = ["date", "unit_nav", "cumulative_nav", "daily_return"]
 
     _memory_cache: dict[str, dict] = {}
@@ -177,7 +186,7 @@ class FundHistoryCache:
             os.makedirs(self.CACHE_DIR)
 
     def _build_pattern(self, fund_code: str) -> str:
-        return os.path.join(self.CACHE_DIR, f"{self.CACHE_PREFIX}{fund_code}_*.csv")
+        return os.path.join(self.CACHE_DIR, str(fund_code), "*.csv")
 
     def _get_cache_files(self, fund_code: str) -> list[str]:
         return sorted(glob(self._build_pattern(fund_code)))
@@ -187,9 +196,8 @@ class FundHistoryCache:
         return files[-1] if files else None
 
     def _parse_cache_date(self, filepath: str) -> datetime:
-        filename = os.path.basename(filepath)
-        date_str = filename.replace(".csv", "").rsplit("_", 3)[-3:]
-        return datetime.strptime("_".join(date_str), "%Y_%m_%d")
+        filename = os.path.basename(filepath).replace(".csv", "")
+        return datetime.strptime(filename, "%Y_%m_%d")
 
     def _is_today(self, filepath: str) -> bool:
         cache_date = self._parse_cache_date(filepath).date()
@@ -223,7 +231,8 @@ class FundHistoryCache:
     def set(self, fund_code: str, data: list[dict]):
         self.clear(fund_code)
         date_str = datetime.now().strftime("%Y_%m_%d")
-        filepath = os.path.join(self.CACHE_DIR, f"{self.CACHE_PREFIX}{fund_code}_{date_str}.csv")
+        filepath = os.path.join(self.CACHE_DIR, str(fund_code), f"{date_str}.csv")
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
         self._write_csv(filepath, data)
         FundHistoryCache._memory_cache[fund_code] = {
             "date": datetime.now().date().isoformat(),
@@ -235,11 +244,18 @@ class FundHistoryCache:
         for filepath in self._get_cache_files(fund_code):
             if os.path.exists(filepath):
                 os.remove(filepath)
+        # 尝试移除空目录
+        folder = os.path.join(self.CACHE_DIR, str(fund_code))
+        try:
+            if os.path.isdir(folder) and not os.listdir(folder):
+                os.rmdir(folder)
+        except Exception:
+            pass
 
     def clear_all(self):
         """清空所有基金历史净值缓存（内存 + CSV）。"""
         FundHistoryCache._memory_cache = {}
-        pattern = os.path.join(self.CACHE_DIR, f"{self.CACHE_PREFIX}*_*.csv")
+        pattern = os.path.join(self.CACHE_DIR, "*", "*.csv")
         for filepath in glob(pattern):
             if os.path.exists(filepath):
                 os.remove(filepath)

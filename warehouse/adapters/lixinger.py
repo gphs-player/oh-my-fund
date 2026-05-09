@@ -18,7 +18,7 @@ class LixingerDataSource(BaseDataSource):
         self.token = config.get("token", "")
         # TODO: 初始化理杏仁客户端
 
-    def get_fund_list(self, page_num: int | None = None, page_size: int | None = None) -> list[dict]:
+    def get_fund_list(self) -> list[dict]:
         """
         获取基金列表
 
@@ -35,3 +35,6 @@ class LixingerDataSource(BaseDataSource):
 
     def get_fund_history(self, fund_code: str, start_date: str | None = None, end_date: str | None = None) -> list[dict]:
         raise NotImplementedError("理杏仁基金历史净值接口待实现，请参考理杏仁文档")
+
+    def get_fund_rank_page(self, page_num: int = 1, page_size: int = 50, fund_type: int = 0) -> tuple[list[dict], int]:
+        raise NotImplementedError("理杏仁基金排名接口待实现，请参考理杏仁文档")

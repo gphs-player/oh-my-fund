@@ -279,6 +279,9 @@ const InvestmentUI = {
         holding_plan: null
     },
     currentChart: null,
+    _fundSuggestBound: false,
+    _fundSuggestTimer: null,
+    _fundSuggestAbort: null,
     // 显示添加模态框
     showAddModal: function(prefill = {}) {
         document.getElementById('modal-title').textContent = '添加持仓';
@@ -288,6 +291,7 @@ const InvestmentUI = {
         document.getElementById('fund-name').value = prefill.fund_name || '';
         document.getElementById('fund-code').value = prefill.fund_code || '';
         document.getElementById('investment-modal').showModal();
+        this.bindFundSuggest();
 
         const focusField = document.getElementById(prefill.fund_code || prefill.fund_name ? 'sector' : 'fund-name');
         if (focusField) {
@@ -312,6 +316,104 @@ const InvestmentUI = {
         document.getElementById('risk-level').value = investment.risk_level;
         document.getElementById('holding-plan').value = investment.holding_plan;
         document.getElementById('investment-modal').showModal();
+        this.bindFundSuggest();
+    },
+
+    bindFundSuggest: function() {
+        if (this._fundSuggestBound) return;
+        this._fundSuggestBound = true;
+
+        const nameInput = document.getElementById('fund-name');
+        const codeInput = document.getElementById('fund-code');
+        const nameSuggest = document.getElementById('investment-fund-name-suggest');
+        const codeSuggest = document.getElementById('investment-fund-code-suggest');
+        if (!nameInput || !codeInput || !nameSuggest || !codeSuggest) return;
+
+        const hideAll = () => {
+            nameSuggest.classList.add('hidden');
+            codeSuggest.classList.add('hidden');
+            nameSuggest.innerHTML = '';
+            codeSuggest.innerHTML = '';
+        };
+
+        const escapeHtml = (s) => String(s || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+
+        const render = (items, target) => {
+            const el = target === 'name' ? nameSuggest : codeSuggest;
+            if (!items.length) {
+                el.classList.add('hidden');
+                el.innerHTML = '';
+                return;
+            }
+            el.innerHTML = items.map(it => {
+                const code = String(it.fund_code || '');
+                const name = String(it.fund_name || '');
+                return `
+                <li>
+                  <button type="button" class="w-full text-left px-3 py-2 hover:bg-white/10 transition-colors"
+                    data-fund-code="${escapeHtml(code)}" data-fund-name="${escapeHtml(name)}">
+                    <div class="text-sm text-slate-100">${escapeHtml(code)} <span class="text-slate-300">${escapeHtml(name)}</span></div>
+                  </button>
+                </li>`;
+            }).join('');
+            el.classList.remove('hidden');
+        };
+
+        const onPick = (e) => {
+            const btn = e.target.closest('[data-fund-code][data-fund-name]');
+            if (!btn) return;
+            e.preventDefault();
+            this._selectFundSuggest(btn.getAttribute('data-fund-code') || '', btn.getAttribute('data-fund-name') || '');
+        };
+        nameSuggest.addEventListener('mousedown', onPick);
+        codeSuggest.addEventListener('mousedown', onPick);
+
+        const search = (q, target) => {
+            const keyword = String(q || '').trim();
+            if (!keyword) {
+                hideAll();
+                return;
+            }
+            if (this._fundSuggestTimer) clearTimeout(this._fundSuggestTimer);
+            this._fundSuggestTimer = setTimeout(async () => {
+                try {
+                    if (this._fundSuggestAbort) this._fundSuggestAbort.abort();
+                    this._fundSuggestAbort = new AbortController();
+                    const res = await fetch(`/api/funds/search?q=${encodeURIComponent(keyword)}&limit=10`, {
+                        signal: this._fundSuggestAbort.signal,
+                    });
+                    const data = await res.json();
+                    if (!data.success) return;
+                    const items = Array.isArray(data.items) ? data.items : [];
+                    render(items, target);
+                } catch (e) {
+                    // ignore
+                }
+            }, 300);
+        };
+
+        nameInput.addEventListener('input', () => search(nameInput.value, 'name'));
+        codeInput.addEventListener('input', () => search(codeInput.value, 'code'));
+
+        nameInput.addEventListener('blur', () => setTimeout(hideAll, 150));
+        codeInput.addEventListener('blur', () => setTimeout(hideAll, 150));
+    },
+
+    _selectFundSuggest: function(code, name) {
+        const nameInput = document.getElementById('fund-name');
+        const codeInput = document.getElementById('fund-code');
+        if (nameInput) nameInput.value = name;
+        if (codeInput) codeInput.value = code;
+
+        const nameSuggest = document.getElementById('investment-fund-name-suggest');
+        const codeSuggest = document.getElementById('investment-fund-code-suggest');
+        if (nameSuggest) { nameSuggest.classList.add('hidden'); nameSuggest.innerHTML = ''; }
+        if (codeSuggest) { codeSuggest.classList.add('hidden'); codeSuggest.innerHTML = ''; }
     },
 
     // 处理表单提交

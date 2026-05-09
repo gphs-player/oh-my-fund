@@ -21,11 +21,9 @@
   - 基金基本概况
   - 基金历史净值
   - 实时估值 / 涨跌幅
-- 新增东方财富手机接口数据源（`eastmoney_mob`）已支持：
-  - 基金列表（支持 `pageNum/pageSize` 分页、`fund_type_code` 类型过滤）
-  - 基金类型列表（固定枚举）
-  - 基金详情（四块：基金详情/JJXQ、阶段涨幅/JDZF、基金规模/JJGM、基金持仓/JJCC）
-- 基金市场模块已支持：
+- 已移除东方财富手机接口数据源（`eastmoney_mob`）作为可选数据源：
+  - 基金榜列表改为 Default 数据源内置“基金排名”（按日涨跌幅排序），并沿用东财 FundType 枚举做筛选
+- 基金榜模块已支持：
   - “全部” / “自选”双视图
   - 搜索 / 筛选 / 分页
   - 基金详情弹层
@@ -58,16 +56,20 @@ open http://localhost:5001
 fund-calculator/
 ├── app.py
 ├── data/
-│   ├── markets.csv
-│   ├── investments.csv
-│   ├── favorites.csv
-│   ├── favorite_groups.csv
-│   ├── favorite_group_memberships.csv
-│   ├── datasources.csv
-│   ├── settings.csv
-│   ├── strategies.csv
-│   ├── funds_list_cache_*.csv
-│   └── fund_history_cache_<fund_code>_*.csv
+│   ├── store/
+│   │   ├── markets.csv
+│   │   ├── investments.csv
+│   │   ├── favorites.csv
+│   │   ├── favorite_groups.csv
+│   │   ├── favorite_group_memberships.csv
+│   │   ├── datasources.csv
+│   │   ├── settings.csv
+│   │   └── strategies.csv
+│   ├── cache/
+│   │   ├── funds_list/                 # YYYY_MM_DD.csv
+│   │   ├── fund_history_value/         # <fund_code>/YYYY_MM_DD.csv
+│   │   └── ai_analysis/                # <fund_code>/YYYYMMDD_1500.csv
+│   └── _backup/                        # 启动迁移时自动备份
 ├── strategies/
 │   ├── base.py
 │   ├── backtest.py
@@ -83,7 +85,6 @@ fund-calculator/
 │       ├── base.py
 │       ├── default.py
 │       ├── eastmoney_overview.py
-│       ├── eastmoney_mob.py
 │       ├── factory.py
 │       ├── lixinger.py
 │       └── tushare.py
@@ -263,11 +264,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
 - 基金列表缓存：
   - 内存 + CSV
-  - 受 `settings.csv` 中 `cache_expire_days` 控制
+  - 受 `data/store/settings.csv` 中 `cache_expire_days` 控制
 - 历史净值缓存：
   - 内存 + CSV
   - 仅当天有效，跨天自动失效
-  - 文件模式：`fund_history_cache_<fund_code>_YYYY_MM_DD.csv`
+  - 文件模式：`data/cache/fund_history_value/<fund_code>/YYYY_MM_DD.csv`
 
 ## 常见开发任务
 
@@ -335,7 +336,7 @@ try {
 - [ ] 红涨绿跌、红买绿卖配色语义正确
 - [ ] 单策略与多策略组合都能保存和回填
 - [ ] 已保存策略可删除
-- [ ] 基金市场、自选分组、设置、计算器未被破坏
+- [ ] 基金榜、自选分组、设置、计算器未被破坏
 
 ## 备注
 

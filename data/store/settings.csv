@@ -1,0 +1,7 @@
+key,value
+cache_expire_days,7
+llm_provider,claude
+llm_api_key,sk-5L9P3xLoRLrEdKEPVEfY0qRUH4RWmyJLIsE0i54HHv6QGfaH
+ai_holding_periods,4
+llm_model,claude-opus-4-6
+llm_base_url,https://cc.zhihuiapi.top

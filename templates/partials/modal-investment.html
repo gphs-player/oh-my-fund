@@ -7,12 +7,18 @@
 
             <div class="form-control mb-3">
                 <label class="label"><span class="label-text">基金名称 *</span></label>
-                <input type="text" id="fund-name" class="input input-bordered" required>
+                <div class="relative">
+                    <input type="text" id="fund-name" class="input input-bordered w-full" required autocomplete="off">
+                    <ul id="investment-fund-name-suggest" class="hidden absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border border-white/10 bg-base-300 shadow-xl overflow-hidden max-h-72 overflow-y-auto"></ul>
+                </div>
             </div>
 
             <div class="form-control mb-3">
                 <label class="label"><span class="label-text">基金代码 * (5-8位数字)</span></label>
-                <input type="text" id="fund-code" class="input input-bordered" pattern="\d{5,8}" required>
+                <div class="relative">
+                    <input type="text" id="fund-code" class="input input-bordered w-full" pattern="\d{5,8}" required autocomplete="off">
+                    <ul id="investment-fund-code-suggest" class="hidden absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border border-white/10 bg-base-300 shadow-xl overflow-hidden max-h-72 overflow-y-auto"></ul>
+                </div>
             </div>
 
             <div class="form-control mb-3">

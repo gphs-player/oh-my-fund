@@ -53,6 +53,7 @@
 
     <!-- JavaScript -->
     <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/combobox.js') }}"></script>
     <script src="{{ url_for('static', filename='js/investment.js') }}"></script>
     <script src="{{ url_for('static', filename='js/fund-select.js') }}"></script>
     <script src="{{ url_for('static', filename='js/ai-pick.js') }}"></script>
@@ -61,7 +62,23 @@
     <script src="{{ url_for('static', filename='js/compound.js') }}"></script>
     <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
     <script>
-        function switchMainTab(tabName) {
+        function getAllMainTabs() {
+            return Array.from(document.querySelectorAll('[data-tab]'))
+                .map(el => (el.dataset.tab || '').trim())
+                .filter(Boolean);
+        }
+
+        function parseMainTabFromHash(allowedTabs) {
+            const raw = (window.location.hash || '').replace(/^#/, '').trim();
+            if (!raw) return null;
+            return allowedTabs.includes(raw) ? raw : null;
+        }
+
+        function switchMainTab(tabName, opts) {
+            opts = opts || {};
+            const updateHash = opts.updateHash !== false; // 默认 true
+            const replace = opts.replace !== false;       // 默认 true（程序调用不污染历史）
+
             const targetTabButton = document.querySelector(`[data-tab="${tabName}"]`);
             const targetTab = document.getElementById(`${tabName}-tab`);
             if (!targetTabButton || !targetTab) return;
@@ -75,25 +92,43 @@
             targetTabButton.classList.add('tab-active');
             targetTab.classList.remove('hidden');
             targetTab.style.display = 'block';
+
+            if (updateHash) {
+                if (replace) {
+                    history.replaceState(null, '', `#${tabName}`);
+                } else {
+                    // 用户点击：产生历史记录，便于后退/前进
+                    window.location.hash = tabName;
+                }
+            }
         }
 
         window.switchMainTab = switchMainTab;
 
-        // Tab切换逻辑 - 只选择有data-tab属性的主Tab
+        // 点击主Tab：统一写入 hash
         document.querySelectorAll('[data-tab]').forEach(tab => {
             tab.addEventListener('click', function() {
-                switchMainTab(this.dataset.tab);
-                if (this.dataset.tab === 'strategy') {
-                    history.replaceState(null, '', '#strategy');
-                } else if (window.location.hash === '#strategy') {
-                    history.replaceState(null, '', window.location.pathname + window.location.search);
-                }
+                const name = (this.dataset.tab || '').trim();
+                if (!name) return;
+                switchMainTab(name, { updateHash: true, replace: false });
             });
         });
 
-        if (window.location.hash === '#strategy') {
-            switchMainTab('strategy');
-        }
+        // 初始化：根据 hash 恢复；无 hash 则默认 investment（不强行写 hash）
+        (function initMainTabRoute() {
+            const allowedTabs = getAllMainTabs();
+            const tabFromHash = parseMainTabFromHash(allowedTabs);
+            const initialTab = tabFromHash || 'investment';
+            switchMainTab(initialTab, { updateHash: false });
+        })();
+
+        // 前进/后退：跟随 hash
+        window.addEventListener('hashchange', function() {
+            const allowedTabs = getAllMainTabs();
+            const tabFromHash = parseMainTabFromHash(allowedTabs);
+            const nextTab = tabFromHash || 'investment';
+            switchMainTab(nextTab, { updateHash: false });
+        });
 
         function switchSubtab(groupName, targetId) {
             const targetContent = document.getElementById(targetId);
