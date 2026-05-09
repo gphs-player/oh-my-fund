@@ -10,6 +10,7 @@ from strategies.backtest import run_backtest
 from warehouse import FundRepository
 from warehouse.adapters import create_datasource, get_available_types
 from warehouse.ai_fund_pick.parser import FundPickParseError, parse_fund_pick_prompt
+from warehouse.ai_fund_pick.clarify import apply_answers, build_questions
 
 app = Flask(__name__)
 
@@ -1433,12 +1434,56 @@ def ai_fund_pick_parse_prompt():
             'model': model,
             'base_url': base_url,
         })
-        return jsonify({'success': True, 'draft': draft})
+        questions = build_questions(draft)
+        if questions:
+            return jsonify({
+                'success': True,
+                'need_clarify': True,
+                'questions': questions,
+                'draft_preview': draft,
+            })
+        return jsonify({'success': True, 'need_clarify': False, 'draft': draft})
     except FundPickParseError as e:
         return jsonify({'success': False, 'message': str(e)}), 400
     except Exception as e:
         msg = str(e) or '解析失败'
         return jsonify({'success': False, 'message': msg[:500]}), 400
+
+
+@app.route('/api/ai-fund-pick/parse/confirm', methods=['POST'])
+def ai_fund_pick_parse_confirm():
+    """提交边界补全答案，生成最终 draft（不再二次调用 LLM）。"""
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return jsonify({'success': False, 'message': '无效请求'}), 400
+
+    prompt = str(data.get('prompt') or '').strip()
+    draft = data.get('draft')
+    questions = data.get('questions')
+    answers = data.get('answers')
+
+    if not prompt:
+        return jsonify({'success': False, 'message': '提示词不能为空'}), 400
+    if not isinstance(draft, dict):
+        return jsonify({'success': False, 'message': 'draft 无效'}), 400
+    if not isinstance(questions, list):
+        return jsonify({'success': False, 'message': 'questions 无效'}), 400
+    if not isinstance(answers, list):
+        return jsonify({'success': False, 'message': 'answers 无效'}), 400
+
+    try:
+        draft_final = apply_answers(draft, questions, answers)
+        remain = build_questions(draft_final)
+        if remain:
+            return jsonify({
+                'success': True,
+                'need_clarify': True,
+                'questions': remain,
+                'draft_preview': draft_final,
+            })
+        return jsonify({'success': True, 'need_clarify': False, 'draft': draft_final})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)[:500]}), 400
 
 
 # =====================

@@ -49,6 +49,21 @@
                 </div>
             </div>
 
+            <!-- 最小必要交互：边界补全 -->
+            <div id="ai-fund-pick-clarify" class="hidden mt-6">
+                <div class="rounded-2xl border border-white/10 bg-black/15 p-4">
+                    <div class="text-sm font-semibold text-slate-200 mb-3">需要补充的信息</div>
+                    <div id="ai-fund-pick-clarify-questions" class="space-y-4"></div>
+                    <div class="mt-4 flex justify-end gap-2">
+                        <button type="button" id="ai-fund-pick-clarify-confirm-btn"
+                                class="btn btn-primary btn-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                                disabled>
+                            继续生成草案
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <div id="ai-fund-pick-error" class="hidden mt-6">
                 <div class="alert alert-error">
                     <span id="ai-fund-pick-error-text">生成失败</span>
@@ -57,4 +72,3 @@
         </div>
     </div>
 </div>
-
