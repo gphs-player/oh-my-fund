@@ -1,0 +1,60 @@
+<div id="ai-pick-tab" class="tab-content hidden">
+    <div class="card bg-base-300/50 backdrop-blur-sm shadow-xl">
+        <div class="card-body">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <h2 class="card-title mb-0">AI 选基</h2>
+                <div class="text-xs text-slate-300">
+                    <span id="ai-fund-pick-config-status">检查配置中...</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 items-stretch">
+                <div class="form-control lg:col-span-2">
+                    <label class="label py-0 mb-2">
+                        <span class="text-sm font-semibold text-slate-200">筛选提示词</span>
+                    </label>
+                    <textarea id="ai-fund-pick-prompt"
+                              class="textarea textarea-bordered w-full min-h-[144px] resize-y"
+                              placeholder="例如：偏稳健，近一年回撤小；股票仓位不要太高；尽量分散；过滤掉暂停申购的；从全量里筛出前 50 个候选。"></textarea>
+                </div>
+
+                <div class="form-control h-full">
+                    <label class="label py-0 mb-2">
+                        <span class="text-sm font-semibold text-slate-200">&nbsp;</span>
+                    </label>
+                    <div class="flex flex-col h-full justify-evenly gap-2">
+                        <button type="button" id="ai-fund-pick-generate-btn"
+                                class="btn btn-primary btn-sm h-9 min-h-9 w-full transition-colors duration-200">
+                            生成筛选方案
+                        </button>
+                        <button type="button" id="ai-fund-pick-run-btn"
+                                class="btn btn-primary btn-sm h-9 min-h-9 w-full transition-colors duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                                disabled>
+                            执行筛选（待实现）
+                        </button>
+                        <button type="button" id="ai-fund-pick-reset-btn"
+                                class="btn btn-outline btn-sm h-9 min-h-9 w-full transition-colors duration-200">
+                            清空
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="text-sm font-semibold text-slate-200">筛选方案（draft JSON）</div>
+                </div>
+                <div class="rounded-2xl border border-white/10 bg-black/15 p-4">
+                    <pre id="ai-fund-pick-plan-json" class="text-xs text-slate-200 whitespace-pre-wrap break-words">（尚未生成）</pre>
+                </div>
+            </div>
+
+            <div id="ai-fund-pick-error" class="hidden mt-6">
+                <div class="alert alert-error">
+                    <span id="ai-fund-pick-error-text">生成失败</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
