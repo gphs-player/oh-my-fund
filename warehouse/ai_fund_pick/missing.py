@@ -19,7 +19,14 @@ def _contains_any(text: str, keywords: list[str]) -> bool:
 
 
 def _is_time_window_sensitive(metric_name: str) -> bool:
-    return _contains_any(metric_name, ["年化", "收益", "回撤", "最大回撤", "波动", "夏普"])
+    # 这些指标通常必须绑定时间窗口才能计算/比较
+    return _contains_any(metric_name, [
+        "年化",
+        "收益", "收益率",
+        "回撤", "最大回撤",
+        "波动", "夏普",
+        "涨幅", "涨跌幅", "涨跌",
+    ])
 
 
 def build_missing_items(draft: dict) -> list[dict]:
@@ -32,6 +39,7 @@ def build_missing_items(draft: dict) -> list[dict]:
 
     items: list[dict] = []
     idx = 1
+    seen: set[str] = set()
 
     has_sort = False
     has_soft_preference = False
@@ -51,21 +59,24 @@ def build_missing_items(draft: dict) -> list[dict]:
         if intent_type == "hard_filter":
             # window missing (only when time-window-sensitive)
             if (window is None or str(window).strip() == "") and _is_time_window_sensitive(metric_name):
-                items.append(
-                    {
-                        "item_id": f"m{idx}",
-                        "intent_index": i,
-                        "metric_name": metric_name,
-                        "field": "window",
-                        "evidence": evidence,
-                        "problem": "未指定时间窗口",
-                        "suggestion": "常见：近1年/近3年/成立以来（也可自定义）",
-                        "input_type": "enum_or_text",
-                        "options": WINDOW_OPTIONS_DEFAULT,
-                        "required": True,
-                    }
-                )
-                idx += 1
+                key = f"{i}::window::{metric_name}"
+                if key not in seen:
+                    seen.add(key)
+                    items.append(
+                        {
+                            "item_id": f"m{idx}",
+                            "intent_index": i,
+                            "metric_name": metric_name,
+                            "field": "window",
+                            "evidence": evidence,
+                            "problem": "未指定时间窗口",
+                            "suggestion": "常见：近1月/近3月/近6月/近1年/成立以来（也可自定义）",
+                            "input_type": "enum_or_text",
+                            "options": WINDOW_OPTIONS_DEFAULT,
+                            "required": True,
+                        }
+                    )
+                    idx += 1
 
             # value missing
             if value is None:
@@ -115,6 +126,28 @@ def build_missing_items(draft: dict) -> list[dict]:
             has_sort = True
         if intent_type == "soft_preference":
             has_soft_preference = True
+
+        # 对 soft_preference / sort：如果指标需要时间窗口，但用户未给 window，也需要追问
+        if intent_type in {"soft_preference", "sort"}:
+            if (window is None or str(window).strip() == "") and _is_time_window_sensitive(metric_name):
+                key = f"{i}::window::{metric_name}"
+                if key not in seen:
+                    seen.add(key)
+                    items.append(
+                        {
+                            "item_id": f"m{idx}",
+                            "intent_index": i,
+                            "metric_name": metric_name,
+                            "field": "window",
+                            "evidence": evidence,
+                            "problem": "未指定时间窗口",
+                            "suggestion": "常见：近1月/近3月/近6月/近1年/成立以来（也可自定义）",
+                            "input_type": "enum_or_text",
+                            "options": WINDOW_OPTIONS_DEFAULT,
+                            "required": True,
+                        }
+                    )
+                    idx += 1
 
     # 规则：只要有 sort，但没有明确 TopN（limit），必须弹框追问
     if (has_sort or has_soft_preference) and not has_limit_value:

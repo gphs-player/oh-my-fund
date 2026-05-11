@@ -1,57 +1,128 @@
 <div id="ai-pick-tab" class="tab-content hidden">
-    <div class="card bg-base-300/50 backdrop-blur-sm shadow-xl">
-        <div class="card-body">
-            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-                <h2 class="card-title mb-0">AI 选基</h2>
-                <div class="text-xs text-slate-300">
-                    <span id="ai-fund-pick-config-status">检查配置中...</span>
-                </div>
-            </div>
+    <!-- 子 TAB：AI 选基 / AI 分析 -->
+    <div role="tablist" class="tabs tabs-boxed tabs-sm bg-base-300/30 backdrop-blur-sm mb-4 inline-flex">
+        <a role="tab" class="tab tab-active" data-ai-subtab="pick">AI 选基</a>
+        <a role="tab" class="tab" data-ai-subtab="analysis">AI 分析</a>
+    </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 items-stretch">
-                <div class="form-control lg:col-span-2">
-                    <label class="label py-0 mb-2">
-                        <span class="text-sm font-semibold text-slate-200">筛选提示词</span>
-                    </label>
-                    <textarea id="ai-fund-pick-prompt"
-                              class="textarea textarea-bordered w-full min-h-[144px] resize-y"
-                              placeholder="例如：偏稳健，近一年回撤小；股票仓位不要太高；尽量分散；过滤掉暂停申购的；从全量里筛出前 50 个候选。"></textarea>
+    <!-- 子面板：AI 选基（默认） -->
+    <div id="ai-pick-subtab-pick">
+        <div class="card bg-base-300/50 backdrop-blur-sm shadow-xl">
+            <div class="card-body">
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    <h2 class="card-title mb-0">AI 选基</h2>
+                    <div class="text-xs text-slate-300">
+                        <span id="ai-fund-pick-config-status">检查配置中...</span>
+                    </div>
                 </div>
 
-                <div class="form-control h-full">
-                    <label class="label py-0 mb-2">
-                        <span class="text-sm font-semibold text-slate-200">&nbsp;</span>
-                    </label>
-                    <div class="flex flex-col h-full justify-evenly gap-2">
-                        <button type="button" id="ai-fund-pick-generate-btn"
-                                class="btn btn-primary btn-sm h-9 min-h-9 w-full transition-colors duration-200">
-                            生成筛选方案
-                        </button>
-                        <button type="button" id="ai-fund-pick-run-btn"
-                                class="btn btn-primary btn-sm h-9 min-h-9 w-full transition-colors duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
-                                disabled>
-                            执行筛选（待实现）
-                        </button>
-                        <button type="button" id="ai-fund-pick-reset-btn"
-                                class="btn btn-outline btn-sm h-9 min-h-9 w-full transition-colors duration-200">
-                            清空
-                        </button>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 items-stretch">
+                    <div class="form-control lg:col-span-2">
+                        <label class="label py-0 mb-2">
+                            <span class="text-sm font-semibold text-slate-200">筛选提示词</span>
+                        </label>
+                        <textarea id="ai-fund-pick-prompt"
+                                  class="textarea textarea-bordered w-full min-h-[144px] resize-y"
+                                  placeholder="例如：偏稳健，近一年回撤小；股票仓位不要太高；尽量分散；过滤掉暂停申购的；从全量里筛出前 50 个候选。"></textarea>
+                    </div>
+
+                    <div class="form-control h-full">
+                        <label class="label py-0 mb-2">
+                            <span class="text-sm font-semibold text-slate-200">&nbsp;</span>
+                        </label>
+                        <div class="flex flex-col h-full justify-evenly gap-2">
+                            <button type="button" id="ai-fund-pick-generate-btn"
+                                    class="btn btn-primary btn-sm h-9 min-h-9 w-full transition-colors duration-200">
+                                生成筛选方案
+                            </button>
+                            <button type="button" id="ai-fund-pick-run-btn"
+                                    class="btn btn-primary btn-sm h-9 min-h-9 w-full transition-colors duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                                    disabled>
+                                执行筛选（待实现）
+                            </button>
+                            <button type="button" id="ai-fund-pick-reset-btn"
+                                    class="btn btn-outline btn-sm h-9 min-h-9 w-full transition-colors duration-200">
+                                清空
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-6">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="text-sm font-semibold text-slate-200">筛选方案（draft JSON）</div>
+                    </div>
+                    <div class="rounded-2xl border border-white/10 bg-black/15 p-4">
+                        <pre id="ai-fund-pick-plan-json" class="text-xs text-slate-200 whitespace-pre-wrap break-words">（尚未生成）</pre>
+                    </div>
+                </div>
+
+                <div id="ai-fund-pick-error" class="hidden mt-6">
+                    <div class="alert alert-error">
+                        <span id="ai-fund-pick-error-text">生成失败</span>
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
 
-            <div class="mt-6">
-                <div class="flex items-center justify-between mb-2">
-                    <div class="text-sm font-semibold text-slate-200">筛选方案（draft JSON）</div>
+    <!-- 子面板：AI 分析（极简版） -->
+    <div id="ai-pick-subtab-analysis" class="hidden" style="display:none;">
+        <div class="card bg-base-300/50 backdrop-blur-sm shadow-xl">
+            <div class="card-body">
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    <h2 class="card-title mb-0">AI 分析</h2>
+                    <div class="text-xs text-slate-300">
+                        <span id="ai-analysis-config-status">检查配置中...</span>
+                    </div>
                 </div>
-                <div class="rounded-2xl border border-white/10 bg-black/15 p-4">
-                    <pre id="ai-fund-pick-plan-json" class="text-xs text-slate-200 whitespace-pre-wrap break-words">（尚未生成）</pre>
-                </div>
-            </div>
 
-            <div id="ai-fund-pick-error" class="hidden mt-6">
-                <div class="alert alert-error">
-                    <span id="ai-fund-pick-error-text">生成失败</span>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 items-start">
+                    <div class="form-control lg:col-span-2">
+                        <label class="label py-0 mb-2">
+                            <span class="text-sm font-semibold text-slate-200">基金搜索</span>
+                        </label>
+                        <input id="ai-analysis-q" type="text" class="input input-bordered w-full"
+                               placeholder="输入基金代码或名称关键词，等待下方建议列表出现后选择">
+                        <div id="ai-analysis-suggest" class="hidden mt-2 rounded-xl border border-white/10 bg-black/15 p-2 max-h-56 overflow-auto"></div>
+                        <div class="mt-3 text-xs text-slate-400">
+                            已选择基金代码：<span id="ai-analysis-fund-code" class="text-slate-200">（未选择）</span>
+                        </div>
+                    </div>
+
+                    <div class="form-control h-full">
+                        <label class="label py-0 mb-2">
+                            <span class="text-sm font-semibold text-slate-200">&nbsp;</span>
+                        </label>
+                        <div class="flex flex-col gap-2">
+                            <label class="label cursor-pointer justify-start gap-2 py-0">
+                                <input id="ai-analysis-force" type="checkbox" class="checkbox checkbox-sm">
+                                <span class="label-text text-xs text-slate-300">强制刷新（忽略缓存）</span>
+                            </label>
+                            <button type="button" id="ai-analysis-start-btn"
+                                    class="btn btn-primary btn-sm h-9 min-h-9 w-full transition-colors duration-200">
+                                开始分析
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-6">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="text-sm font-semibold text-slate-200">进度</div>
+                        <div id="ai-analysis-progress-percent" class="text-xs text-slate-400">0%</div>
+                    </div>
+                    <progress id="ai-analysis-progress-bar" class="progress progress-primary w-full" value="0" max="100"></progress>
+                    <div id="ai-analysis-progress-text" class="text-xs text-slate-300 mt-2">等待开始...</div>
+                </div>
+
+                <div class="mt-6">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="text-sm font-semibold text-slate-200">结果（JSON）</div>
+                    </div>
+                    <div class="rounded-2xl border border-white/10 bg-black/15 p-4">
+                        <pre id="ai-analysis-result-json" class="text-xs text-slate-200 whitespace-pre-wrap break-words">（尚未开始）</pre>
+                    </div>
                 </div>
             </div>
         </div>
@@ -60,13 +131,10 @@
 
 <!-- 边界补全弹框 -->
 <dialog id="ai-fund-pick-clarify-modal" class="modal">
-    <div class="modal-box bg-base-300/90 backdrop-blur-md max-w-3xl">
-        <h3 class="font-bold text-lg mb-2">边界不明确，需要补充信息</h3>
-        <p class="text-sm text-slate-300 mb-4">请补全以下缺失项，然后点击“重新生成草案”。</p>
+    <div class="modal-box bg-base-300/90 backdrop-blur-md max-w-3xl max-h-[80vh] overflow-hidden">
+        <p class="text-sm text-slate-300 mb-4">请完善以下信息再分析</p>
 
-        <div id="ai-fund-pick-clarify-round" class="text-xs text-slate-400 mb-3"></div>
-
-        <div id="ai-fund-pick-missing-list" class="space-y-4"></div>
+        <div id="ai-fund-pick-missing-list" class="space-y-4 max-h-[55vh] overflow-y-auto pr-1"></div>
 
         <div class="modal-action flex items-center justify-between gap-2">
             <button type="button" class="btn" id="ai-fund-pick-clarify-cancel-btn">取消</button>
