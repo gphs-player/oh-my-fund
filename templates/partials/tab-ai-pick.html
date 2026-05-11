@@ -129,6 +129,20 @@
     </div>
 </div>
 
+<!-- 生成中 Loading 弹框（Step1/Step2 共用） -->
+<dialog id="ai-fund-pick-loading-modal" class="modal">
+    <div class="modal-box bg-base-300/90 backdrop-blur-md max-w-md">
+        <div class="flex items-center gap-3">
+            <span class="loading loading-spinner loading-md"></span>
+            <div class="text-sm text-slate-200" id="ai-fund-pick-loading-text">处理中...</div>
+        </div>
+    </div>
+    <!-- 不提供可见关闭按钮，避免用户中断导致状态错乱 -->
+    <form method="dialog" class="modal-backdrop">
+        <button class="hidden" aria-hidden="true" tabindex="-1">关闭</button>
+    </form>
+</dialog>
+
 <!-- 边界补全弹框 -->
 <dialog id="ai-fund-pick-clarify-modal" class="modal">
     <div class="modal-box bg-base-300/90 backdrop-blur-md max-w-3xl max-h-[80vh] overflow-hidden">

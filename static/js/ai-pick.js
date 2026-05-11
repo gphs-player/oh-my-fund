@@ -297,6 +297,25 @@ const AiFundPick = {
         await this.checkConfig();
     },
 
+    showLoading: function(text) {
+        const dlg = document.getElementById('ai-fund-pick-loading-modal');
+        const textEl = document.getElementById('ai-fund-pick-loading-text');
+        if (textEl) textEl.textContent = String(text || '处理中...');
+        if (!dlg) return;
+        try {
+            if (typeof dlg.showModal === 'function') dlg.showModal();
+            else dlg.setAttribute('open', '');
+        } catch (e) {
+            // ignore
+        }
+    },
+
+    hideLoading: function() {
+        const dlg = document.getElementById('ai-fund-pick-loading-modal');
+        if (!dlg) return;
+        try { dlg.close(); } catch (e) { /* ignore */ }
+    },
+
     bind: function() {
         const genBtn = document.getElementById('ai-fund-pick-generate-btn');
         const resetBtn = document.getElementById('ai-fund-pick-reset-btn');
@@ -379,7 +398,8 @@ const AiFundPick = {
         this._busy = true;
         this._hideError();
         if (genBtn) genBtn.disabled = true;
-        if (planEl) planEl.textContent = '生成中...';
+        if (planEl) planEl.textContent = '处理中...';
+        this.showLoading('第 1 步：正在解析筛选提示词...');
 
         try {
             const resp = await fetch('/api/ai-fund-pick/parse', {
@@ -404,6 +424,7 @@ const AiFundPick = {
                 this._prevMissingSignature = ''; // 首轮没有 prev
 
                 if (planEl) planEl.textContent = JSON.stringify(this._lastDraftPreview || {}, null, 2);
+                this.hideLoading();
                 this.openClarifyModal();
                 return;
             }
@@ -411,13 +432,39 @@ const AiFundPick = {
             const draft = data.draft || {};
             this._lastDraftPreview = draft;
             this._lastMissingItems = null;
-            if (planEl) planEl.textContent = JSON.stringify(draft, null, 2);
+
+            const warnings = (draft && Array.isArray(draft.warnings)) ? draft.warnings : [];
+            if (warnings && warnings.length) {
+                // 有 warnings：不自动进入 Step2，先让用户调整提示词
+                if (planEl) planEl.textContent = JSON.stringify(draft, null, 2);
+                this.hideLoading();
+                showToast('提示词仍有不明确的信息，请先完善后再生成开发计划', 'warning');
+                return;
+            }
+
+            // 无 warnings：自动进入 Step2（生成开发计划 plan）
+            this.closeClarifyModal(); // 保险
+            this.showLoading('第 2 步：正在生成开发计划...');
+            const planResp = await fetch('/api/ai-fund-pick/plan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ draft }),
+            });
+            const planData = await planResp.json();
+            if (!planData || !planData.success) {
+                this._showError((planData && (planData.message || planData.error)) || '生成开发计划失败');
+                if (planEl) planEl.textContent = '（生成失败）';
+                return;
+            }
+            if (planEl) planEl.textContent = JSON.stringify(planData.plan || {}, null, 2);
+            this.hideLoading();
         } catch (e) {
             this._showError('网络错误或服务异常');
             if (planEl) planEl.textContent = '（生成失败）';
         } finally {
             this._busy = false;
             if (genBtn) genBtn.disabled = false;
+            this.hideLoading();
         }
     },
 
@@ -627,7 +674,9 @@ const AiFundPick = {
         this._busy = true;
         this._hideError();
         if (regenBtn) regenBtn.disabled = true;
-        if (planEl) planEl.textContent = '重新生成中...';
+        if (planEl) planEl.textContent = '处理中...';
+        this.closeClarifyModal();
+        this.showLoading('第 1 步：正在解析筛选提示词...');
 
         try {
             const resp = await fetch('/api/ai-fund-pick/parse/refine', {
@@ -658,6 +707,7 @@ const AiFundPick = {
                 this._lastDraftPreview = data.draft_preview || {};
                 this._lastMissingItems = Array.isArray(data.missing_items) ? data.missing_items : [];
                 if (planEl) planEl.textContent = JSON.stringify(this._lastDraftPreview || {}, null, 2);
+                this.hideLoading();
                 this.openClarifyModal();
                 return;
             }
@@ -667,13 +717,36 @@ const AiFundPick = {
             this._lastDraftPreview = draft;
             this._lastMissingItems = null;
             this.closeClarifyModal();
-            if (planEl) planEl.textContent = JSON.stringify(draft, null, 2);
+
+            const warnings = (draft && Array.isArray(draft.warnings)) ? draft.warnings : [];
+            if (warnings && warnings.length) {
+                if (planEl) planEl.textContent = JSON.stringify(draft, null, 2);
+                this.hideLoading();
+                showToast('提示词仍有不明确的信息，请先完善后再生成开发计划', 'warning');
+                return;
+            }
+
+            this.showLoading('第 2 步：正在生成开发计划...');
+            const planResp = await fetch('/api/ai-fund-pick/plan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ draft }),
+            });
+            const planData = await planResp.json();
+            if (!planData || !planData.success) {
+                this._showError((planData && (planData.message || planData.error)) || '生成开发计划失败');
+                if (planEl) planEl.textContent = JSON.stringify(draft, null, 2);
+                return;
+            }
+            if (planEl) planEl.textContent = JSON.stringify(planData.plan || {}, null, 2);
+            this.hideLoading();
         } catch (e) {
             this._showError('网络错误或服务异常');
             if (planEl) planEl.textContent = JSON.stringify(this._lastDraftPreview || {}, null, 2);
         } finally {
             this._busy = false;
             if (regenBtn) this._syncRegenerateEnabled();
+            this.hideLoading();
         }
     },
 };

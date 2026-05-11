@@ -10,6 +10,8 @@ from strategies.backtest import run_backtest
 from warehouse import FundRepository
 from warehouse.adapters import create_datasource, get_available_types
 from warehouse.ai_fund_pick.parser import FundPickParseError, parse_fund_pick_prompt, parse_fund_pick_prompt_refine
+from warehouse.ai_fund_pick.planner import FundPickPlanError, build_fund_pick_plan
+from warehouse.ai_fund_pick.capabilities import CAPABILITIES_V1
 from warehouse.ai_fund_pick.missing import build_missing_items, missing_signature
 from warehouse.paths import STORE_DIR, migrate_data_layout_if_needed
 
@@ -1566,6 +1568,39 @@ def ai_fund_pick_parse_refine():
         return jsonify({'success': False, 'message': str(e)}), 400
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)[:500]}), 400
+
+
+# AI 选基（第 2 步：将 draft 编译为可执行 plan）
+@app.route('/api/ai-fund-pick/plan', methods=['POST'])
+def ai_fund_pick_build_plan():
+    try:
+        data = request.get_json(silent=True) or {}
+        if not isinstance(data, dict):
+            return jsonify({"success": False, "message": "请求体无效"}), 400
+
+        draft = data.get("draft")
+        if not isinstance(draft, dict) or not draft:
+            return jsonify({"success": False, "message": "draft 缺失或无效"}), 400
+
+        settings = read_settings()
+        provider = str(settings.get('llm_provider') or '').strip()
+        api_key = str(settings.get('llm_api_key') or '').strip()
+        model = str(settings.get('llm_model') or '').strip()
+        base_url = str(settings.get('llm_base_url') or '').strip()
+        if not provider or not api_key:
+            return jsonify({'success': False, 'message': '请先在「设置」页配置 AI 模型（provider/api_key）'}), 400
+
+        plan = build_fund_pick_plan(draft, CAPABILITIES_V1, {
+            "provider": provider,
+            "api_key": api_key,
+            "model": model,
+            "base_url": base_url,
+        })
+        return jsonify({"success": True, "plan": plan})
+    except FundPickPlanError as e:
+        return jsonify({"success": False, "message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)[:500]}), 400
 
 
 # =====================
