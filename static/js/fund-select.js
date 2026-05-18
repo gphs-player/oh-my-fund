@@ -29,6 +29,17 @@ const FundSelector = {
     _html2canvasLoadingPromise: null,
     _blurredBgCache: null,
 
+    // 今日牛基（today-best）
+    todayBestPeriodCode: 'Z',
+    todayBestTopN: 1,
+    todayBestMinReturn: null,
+    todayBestSelectedTypes: new Set(), // 为空表示“不限制类型”（等价全部类型）
+    todayBestAllTypes: [], // [{value,label}]
+    todayBestRows: [],
+    todayBestRunning: false,
+    todayBestAbortController: null,
+    todayBestProgress: { done: 0, total: 0, hit: 0, failed: 0 },
+
     init: function() {
         this.bindEvents();
         this.render();
@@ -79,6 +90,35 @@ const FundSelector = {
         window.addEventListener('resize', () => {
             this.adjustDetailModalHeight();
         });
+
+        // 今日牛基筛选：仅更新状态，实际重算由“刷新”触发
+        const periodSelect = document.getElementById('today-best-period');
+        const topnInput = document.getElementById('today-best-topn');
+        const minReturnInput = document.getElementById('today-best-min-return');
+
+        if (periodSelect) {
+            periodSelect.addEventListener('change', () => {
+                this.todayBestPeriodCode = String(periodSelect.value || 'Z').trim() || 'Z';
+            });
+        }
+        if (topnInput) {
+            topnInput.addEventListener('change', () => {
+                const n = parseInt(String(topnInput.value || '1'), 10);
+                this.todayBestTopN = Number.isFinite(n) ? Math.max(1, Math.min(200, n)) : 1;
+                topnInput.value = String(this.todayBestTopN);
+            });
+        }
+        if (minReturnInput) {
+            minReturnInput.addEventListener('change', () => {
+                const raw = String(minReturnInput.value || '').trim();
+                if (!raw) {
+                    this.todayBestMinReturn = null;
+                    return;
+                }
+                const v = Number(raw);
+                this.todayBestMinReturn = Number.isFinite(v) ? v : null;
+            });
+        }
     },
 
     openSharePoster: async function() {
@@ -634,6 +674,14 @@ const FundSelector = {
     },
 
     applyFilters: function() {
+        if (this.selectedScope === 'today-best') {
+            // 今日牛基：进入即自动计算一次；调整条件后由“刷新”显式触发重算
+            if (!this.todayBestRunning) {
+                void this.startTodayBest({ clear: true });
+            }
+            this.render();
+            return;
+        }
         if (this.selectedScope === 'favorite') {
             // 自选视图按 favorites.csv 本地过滤/分页（不再依赖基金全量列表）
             this.filteredFunds = this.getFavoriteRowsBySelectedGroup();
@@ -667,9 +715,279 @@ const FundSelector = {
     },
 
     switchScope: function(scope) {
-        if (scope !== 'all' && scope !== 'favorite') return;
+        if (scope !== 'all' && scope !== 'favorite' && scope !== 'today-best') return;
+        if (this.selectedScope === 'today-best' && scope !== 'today-best') {
+            this.stopTodayBest();
+        }
         this.selectedScope = scope;
         this.applyFilters();
+    },
+
+    // ===== 今日牛基（today-best）=====
+    setTodayBestTopN: function(n) {
+        const topnInput = document.getElementById('today-best-topn');
+        const v = parseInt(String(n || ''), 10);
+        this.todayBestTopN = Number.isFinite(v) ? Math.max(1, Math.min(200, v)) : 1;
+        if (topnInput) topnInput.value = String(this.todayBestTopN);
+    },
+
+    todayBestSelectAllTypes: function() {
+        // 为空表示“不限制”
+        this.todayBestSelectedTypes = new Set();
+        this.renderTodayBestTypeOptions();
+    },
+
+    todayBestClearTypes: function() {
+        // 清空筛选：等价“不限制”
+        this.todayBestSelectedTypes = new Set();
+        this.renderTodayBestTypeOptions();
+    },
+
+    toggleTodayBestType: function(value) {
+        const v = String(value || '').trim();
+        if (!v) return;
+        const all = Array.isArray(this.todayBestAllTypes) ? this.todayBestAllTypes : [];
+        const allValues = all.map(x => x.value);
+        if (allValues.length === 0) return;
+
+        const selected = (this.todayBestSelectedTypes instanceof Set) ? this.todayBestSelectedTypes : new Set();
+        const isAllSelected = selected.size === 0;
+
+        if (isAllSelected) {
+            // 从“全选”状态切到“部分选择”：先把所有值填入，再做 toggle
+            this.todayBestSelectedTypes = new Set(allValues);
+        }
+
+        const s = this.todayBestSelectedTypes;
+        if (s.has(v)) s.delete(v);
+        else s.add(v);
+
+        // 如果最终选中数量等于全量，回到“不限制”（用空 set 表达）
+        if (s.size === allValues.length) {
+            this.todayBestSelectedTypes = new Set();
+        }
+        this.renderTodayBestTypeOptions();
+    },
+
+    refreshTodayBest: function() {
+        // 清空之后再刷新
+        this.stopTodayBest();
+        void this.startTodayBest({ clear: true });
+    },
+
+    stopTodayBest: function() {
+        if (this.todayBestAbortController) {
+            try { this.todayBestAbortController.abort(); } catch (e) { /* ignore */ }
+        }
+        this.todayBestAbortController = null;
+        this.todayBestRunning = false;
+        this.renderTodayBestProgress();
+    },
+
+    startTodayBest: async function(options) {
+        const opts = options || {};
+        if (this.todayBestRunning) return;
+
+        if (opts.clear) {
+            this.todayBestRows = [];
+            this.todayBestProgress = { done: 0, total: 0, hit: 0, failed: 0 };
+            // 类型列表来自 overview 解析，实时补全；清空后重新收集
+            this.todayBestAllTypes = [];
+            this.render();
+        }
+
+        this.todayBestRunning = true;
+        this.todayBestAbortController = new AbortController();
+        const signal = this.todayBestAbortController.signal;
+
+        const periodCode = String(this.todayBestPeriodCode || 'Z').trim() || 'Z';
+        const topN = Math.max(1, Math.min(200, parseInt(String(this.todayBestTopN || 1), 10) || 1));
+        const minReturn = (this.todayBestMinReturn === null || this.todayBestMinReturn === undefined) ? null : Number(this.todayBestMinReturn);
+        const selectedTypes = (this.todayBestSelectedTypes instanceof Set) ? this.todayBestSelectedTypes : new Set();
+        const hasTypeFilter = selectedTypes.size > 0; // 非空表示“限制到这些类型”；空表示“不限制”
+
+        const toNum = (v) => {
+            if (v === null || v === undefined) return null;
+            const s = String(v).replace('%', '').trim();
+            if (!s || s === '--') return null;
+            const n = Number(s);
+            return Number.isFinite(n) ? n : null;
+        };
+
+        try {
+            // 1) 拉全量 codes
+            const res = await fetch('/api/funds/all-codes', { signal });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const payload = await res.json();
+            if (!payload || !payload.success) throw new Error(payload && payload.message ? payload.message : '加载基金代码失败');
+            const items = Array.isArray(payload.items) ? payload.items : [];
+
+            const codeToName = {};
+            const codes = [];
+            items.forEach(x => {
+                if (!x) return;
+                const code = String(x.fund_code || '').trim();
+                if (!code) return;
+                codes.push(code);
+                codeToName[code] = String(x.fund_name || '').trim();
+            });
+
+            this.todayBestProgress = { done: 0, total: codes.length, hit: 0, failed: 0 };
+            this.renderTodayBestProgress();
+
+            // 2) 分批拉 overview
+            const batchSize = 80;
+            const candidates = [];
+            const typeMap = new Map(); // value -> label
+
+            for (let i = 0; i < codes.length; i += batchSize) {
+                if (signal.aborted) throw new Error('aborted');
+                const batch = codes.slice(i, i + batchSize);
+
+                const r = await fetch('/api/funds/overview-batch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fund_codes: batch }),
+                    signal
+                });
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const data = await r.json();
+                if (!data || !data.success) throw new Error(data && data.message ? data.message : '批量加载失败');
+
+                const itemsByCode = data.items_by_code || {};
+                const errors = data.errors || {};
+
+                this.todayBestProgress.failed += Object.keys(errors).length;
+
+                batch.forEach(code => {
+                    const its = itemsByCode[code];
+                    if (!Array.isArray(its) || its.length === 0) {
+                        return;
+                    }
+                    const row = this.parseOverviewItemsToTodayBestRow(code, codeToName[code] || '', its, periodCode);
+                    if (!row) return;
+
+                    // 收集类型候选
+                    if (row.fund_type_value) {
+                        if (!typeMap.has(row.fund_type_value)) {
+                            typeMap.set(row.fund_type_value, row.fund_type_name || row.fund_type_value);
+                        }
+                    }
+
+                    // 类型筛选
+                    if (hasTypeFilter) {
+                        if (!row.fund_type_value || !selectedTypes.has(row.fund_type_value)) return;
+                    }
+
+                    // 最小涨幅筛选
+                    if (minReturn !== null && minReturn !== undefined && Number.isFinite(minReturn)) {
+                        const rp = (typeof row.returnPct === 'number' && Number.isFinite(row.returnPct)) ? row.returnPct : null;
+                        if (rp === null) return;
+                        if (rp < minReturn) return;
+                    }
+
+                    candidates.push(row);
+                });
+
+                this.todayBestProgress.done = Math.min(codes.length, i + batch.length);
+                this.todayBestProgress.hit = candidates.length;
+
+                // 类型列表实时补全（不影响口径：类型仍来自 overview）
+                this.todayBestAllTypes = Array.from(typeMap.entries()).map(([value, label]) => ({ value, label }));
+                this.renderTodayBestTypeOptions();
+                this.renderTodayBestProgress();
+            }
+
+            // 3) 排序 + 截断
+            candidates.sort((a, b) => {
+                const ar = (a.rank === null || a.rank === undefined) ? 999999 : a.rank;
+                const br = (b.rank === null || b.rank === undefined) ? 999999 : b.rank;
+                if (ar !== br) return ar - br;
+                const asyl = (typeof a.returnPct === 'number' && Number.isFinite(a.returnPct)) ? a.returnPct : -999999;
+                const bsyl = (typeof b.returnPct === 'number' && Number.isFinite(b.returnPct)) ? b.returnPct : -999999;
+                if (asyl !== bsyl) return bsyl - asyl;
+                return String(a.fund_code || '').localeCompare(String(b.fund_code || ''));
+            });
+
+            this.todayBestRows = candidates.slice(0, topN);
+            this.todayBestProgress.hit = this.todayBestRows.length;
+            this.todayBestRunning = false;
+            this.render();
+            showToast(`计算完成：命中${this.todayBestProgress.hit}，失败${this.todayBestProgress.failed}`, 'success');
+        } catch (e) {
+            if (String(e && e.message ? e.message : e).includes('aborted')) {
+                // 用户主动停止：不提示错误
+            } else {
+                showToast('今日牛基计算失败: ' + (e && e.message ? e.message : String(e)), 'error');
+            }
+        } finally {
+            this.todayBestRunning = false;
+            this.todayBestAbortController = null;
+            this.renderTodayBestProgress();
+            this.render();
+        }
+    },
+
+    parseOverviewItemsToTodayBestRow: function(fundCode, fundName, items, periodCode) {
+        const code = String(fundCode || '').trim();
+        if (!code) return null;
+        const name = String(fundName || '').trim();
+        const p = String(periodCode || 'Z').trim().toUpperCase() || 'Z';
+
+        let rank = null;
+        let sc = null;
+        let syl = null;
+        let fundTypeValue = '';
+        let fundTypeName = '';
+
+        const toInt = (v) => {
+            if (v === null || v === undefined) return null;
+            const s = String(v).trim();
+            if (!s || s === '--') return null;
+            const n = parseInt(s, 10);
+            return Number.isFinite(n) ? n : null;
+        };
+        const toNum = (v) => {
+            if (v === null || v === undefined) return null;
+            const s = String(v).replace('%', '').trim();
+            if (!s || s === '--') return null;
+            const n = Number(s);
+            return Number.isFinite(n) ? n : null;
+        };
+
+        (items || []).forEach(it => {
+            if (!it) return;
+            const section = String(it.section || '').trim();
+            const key = String(it.key || '').trim();
+            const value = it.value;
+
+            if (section === 'JDZF') {
+                if (key === `${p}.rank`) rank = toInt(value);
+                else if (key === `${p}.sc`) sc = toInt(value);
+                else if (key === `${p}.syl`) syl = toNum(value);
+                return;
+            }
+            if (section === 'JJXQ') {
+                // 类型字段以实际返回为准：优先 FUNDTYPE
+                if (key === 'FUNDTYPE' || key === 'FUNDTYPECODE') {
+                    fundTypeValue = String(value || '').trim();
+                    fundTypeName = fundTypeValue;
+                }
+            }
+        });
+
+        // 缺 rank/sc：直接排除
+        if (rank === null || sc === null) return null;
+
+        return {
+            fund_code: code,
+            fund_name: name,
+            fund_type_value: fundTypeValue,
+            fund_type_name: fundTypeName,
+            returnPct: syl,
+            rank,
+            sc
+        };
     },
 
     selectFavoriteGroup: function(groupId) {
@@ -733,6 +1051,7 @@ const FundSelector = {
     render: function() {
         this.renderScopeButtons();
         this.renderDiscoveryFilters();
+        this.renderTodayBestFilters();
         this.renderFavoriteToolbar();
         this.renderKeywordClearButton();
         this.renderContent();
@@ -742,17 +1061,81 @@ const FundSelector = {
     renderScopeButtons: function() {
         const allButton = document.getElementById('fund-scope-all');
         const favoriteButton = document.getElementById('fund-scope-favorite');
-        if (!allButton || !favoriteButton) return;
+        const todayBestButton = document.getElementById('fund-scope-today-best');
+        if (!allButton || !favoriteButton || !todayBestButton) return;
 
         const isAll = this.selectedScope === 'all';
+        const isFav = this.selectedScope === 'favorite';
+        const isToday = this.selectedScope === 'today-best';
         allButton.className = `btn btn-sm ${isAll ? 'btn-primary' : 'btn-outline'}`;
-        favoriteButton.className = `btn btn-sm ${!isAll ? 'btn-primary' : 'btn-outline'}`;
+        favoriteButton.className = `btn btn-sm ${isFav ? 'btn-primary' : 'btn-outline'}`;
+        todayBestButton.className = `btn btn-sm ${isToday ? 'btn-primary' : 'btn-outline'}`;
     },
 
     renderDiscoveryFilters: function() {
         const discoveryFilters = document.getElementById('fund-discovery-filters');
         if (!discoveryFilters) return;
         discoveryFilters.classList.toggle('hidden', this.selectedScope !== 'all');
+    },
+
+    renderTodayBestFilters: function() {
+        const wrap = document.getElementById('today-best-filters');
+        if (!wrap) return;
+        const isOn = this.selectedScope === 'today-best';
+        wrap.classList.toggle('hidden', !isOn);
+        if (!isOn) return;
+
+        const periodSelect = document.getElementById('today-best-period');
+        const topnInput = document.getElementById('today-best-topn');
+        const minReturnInput = document.getElementById('today-best-min-return');
+        if (periodSelect) periodSelect.value = this.todayBestPeriodCode || 'Z';
+        if (topnInput) topnInput.value = String(this.todayBestTopN || 1);
+        if (minReturnInput) minReturnInput.value = (this.todayBestMinReturn === null || this.todayBestMinReturn === undefined) ? '' : String(this.todayBestMinReturn);
+
+        this.renderTodayBestTypeOptions();
+        this.renderTodayBestProgress();
+    },
+
+    renderTodayBestProgress: function() {
+        const el = document.getElementById('today-best-progress');
+        if (!el) return;
+        const p = this.todayBestProgress || { done: 0, total: 0, hit: 0, failed: 0 };
+        if (this.todayBestRunning) {
+            el.textContent = `正在计算：已处理 ${p.done}/${p.total}，命中 ${p.hit}，失败 ${p.failed}`;
+        } else if (p.total > 0) {
+            el.textContent = `计算完成：已处理 ${p.done}/${p.total}，命中 ${p.hit}，失败 ${p.failed}`;
+        } else {
+            el.textContent = '未开始计算';
+        }
+    },
+
+    renderTodayBestTypeOptions: function() {
+        const listEl = document.getElementById('today-best-type-list');
+        const labelEl = document.getElementById('today-best-type-label');
+        if (!listEl || !labelEl) return;
+
+        const all = Array.isArray(this.todayBestAllTypes) ? this.todayBestAllTypes : [];
+        if (all.length === 0) {
+            listEl.innerHTML = '<div class="text-sm text-slate-400">类型列表将在计算过程中自动补全</div>';
+            labelEl.textContent = '全部类型';
+            return;
+        }
+
+        const selected = this.todayBestSelectedTypes instanceof Set ? this.todayBestSelectedTypes : new Set();
+        const isAllSelected = selected.size === 0;
+        const selectedCount = isAllSelected ? all.length : Array.from(selected).filter(v => all.some(x => x.value === v)).length;
+        labelEl.textContent = isAllSelected ? '全部类型' : `已选 ${selectedCount} 项`;
+
+        listEl.innerHTML = all.map(t => {
+            const checked = isAllSelected || selected.has(t.value);
+            const encodedValue = encodeURIComponent(String(t.value || ''));
+            return `
+                <label class="label cursor-pointer justify-start gap-2 py-1">
+                    <input type="checkbox" class="checkbox checkbox-sm" ${checked ? 'checked' : ''} onchange="FundSelector.toggleTodayBestType(decodeURIComponent('${encodedValue}'))">
+                    <span class="label-text text-sm">${t.label || t.value}</span>
+                </label>
+            `;
+        }).join('');
     },
 
     renderFavoriteToolbar: function() {
@@ -803,6 +1186,12 @@ const FundSelector = {
             return;
         }
 
+        if (this.selectedScope === 'today-best') {
+            const n = Array.isArray(this.todayBestRows) ? this.todayBestRows.length : 0;
+            summaryEl.textContent = `今日牛基命中 ${n} 条`;
+            return;
+        }
+
         if (this.selectedScope === 'favorite') {
             const group = this.favoriteGroups.find(item => item.group_id === this.selectedFavoriteGroupId);
             summaryEl.textContent = `${group ? group.group_name : '当前分组'} 共 ${this.total} 条`;
@@ -816,15 +1205,76 @@ const FundSelector = {
         const loadingEl = document.getElementById('fund-select-loading');
         const emptyEl = document.getElementById('fund-select-empty');
         const tableWrapper = document.getElementById('fund-select-table-wrapper');
+        const todayBestTableWrapper = document.getElementById('today-best-table-wrapper');
         const emptyTitle = document.getElementById('fund-empty-title');
         const emptyDesc = document.getElementById('fund-empty-desc');
         const tbody = document.getElementById('fund-select-table-body');
+        const todayBestTbody = document.getElementById('today-best-table-body');
 
-        if (!loadingEl || !emptyEl || !tableWrapper || !emptyTitle || !emptyDesc || !tbody) return;
+        if (!loadingEl || !emptyEl || !tableWrapper || !todayBestTableWrapper || !emptyTitle || !emptyDesc || !tbody || !todayBestTbody) return;
 
         loadingEl.classList.add('hidden');
         emptyEl.classList.add('hidden');
         tableWrapper.classList.add('hidden');
+        todayBestTableWrapper.classList.add('hidden');
+
+        // 今日牛基：独立渲染（不走分页/后端列表）
+        if (this.selectedScope === 'today-best') {
+            const rows = Array.isArray(this.todayBestRows) ? this.todayBestRows : [];
+            if (this.todayBestRunning && rows.length === 0) {
+                emptyTitle.textContent = '正在计算...';
+                emptyDesc.textContent = '已在后台遍历基金详情，请稍候。';
+                emptyEl.classList.remove('hidden');
+                todayBestTbody.innerHTML = '';
+                this.renderSummary();
+                return;
+            }
+
+            if (!this.todayBestRunning && rows.length === 0) {
+                emptyTitle.textContent = '暂无命中结果';
+                emptyDesc.textContent = '请调整筛选条件后点击“刷新”。';
+                emptyEl.classList.remove('hidden');
+                todayBestTbody.innerHTML = '';
+                this.renderSummary();
+                return;
+            }
+
+            todayBestTbody.innerHTML = rows.map((r, idx) => {
+                const syl = (r && typeof r.returnPct === 'number' && Number.isFinite(r.returnPct))
+                    ? ((r.returnPct >= 0 ? '+' : '') + r.returnPct.toFixed(2) + '%')
+                    : '-';
+                const sylStyle = (r && typeof r.returnPct === 'number' && Number.isFinite(r.returnPct))
+                    ? (r.returnPct > 0 ? 'color:#ef4444;' : r.returnPct < 0 ? 'color:#22c55e;' : '')
+                    : '';
+                const rankText = (r && r.rank && r.sc) ? `${r.rank}/${r.sc}` : (r && r.rankText ? r.rankText : '-');
+                return `
+                    <tr>
+                        <td>${idx + 1}</td>
+                        <td>${r.fund_code || '-'}</td>
+                        <td>${r.fund_name || '-'}</td>
+                        <td>${r.fund_type_name || '-'}</td>
+                        <td><span style="${sylStyle}">${syl}</span></td>
+                        <td>${rankText}</td>
+                        <td>
+                            <div class="flex items-center gap-2 whitespace-nowrap w-full">
+                                <div class="tooltip" data-tip="${this.isFavorite(r.fund_code) ? '取消自选' : '加入自选'}">
+                                    <button type="button" class="btn btn-xs favorite-btn ${this.isFavorite(r.fund_code) ? 'is-active' : ''}" onclick="FundSelector.toggleFavorite('${r.fund_code || ''}')" title="${this.isFavorite(r.fund_code) ? '取消自选' : '加入自选'}">
+                                        <span class="favorite-btn-icon ${this.isFavorite(r.fund_code) ? 'is-active' : ''}">${this.isFavorite(r.fund_code) ? '★' : '☆'}</span>
+                                    </button>
+                                </div>
+                                <div class="tooltip" data-tip="详情">
+                                    <button type="button" class="btn btn-outline btn-xs fund-action-detail" onclick="FundSelector.showDetail('${r.fund_code || ''}')" title="详情">详情</button>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            todayBestTableWrapper.classList.remove('hidden');
+            this.renderSummary();
+            return;
+        }
 
         if (this.isLoading) {
             loadingEl.classList.remove('hidden');
@@ -944,6 +1394,12 @@ const FundSelector = {
         const paginationEl = document.getElementById('fund-select-pagination');
         const paginationButtonsEl = document.getElementById('fund-select-pagination-buttons');
         if (!paginationEl || !paginationButtonsEl) return;
+
+        if (this.selectedScope === 'today-best') {
+            paginationEl.classList.add('hidden');
+            paginationButtonsEl.innerHTML = '';
+            return;
+        }
 
         if (this.isLoading || this.filteredFunds.length === 0) {
             paginationEl.classList.add('hidden');
