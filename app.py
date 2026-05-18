@@ -2094,6 +2094,393 @@ _ai_analysis_jobs = _AiAnalysisJobStore()
 _ai_analysis_executor = ThreadPoolExecutor(max_workers=4)
 
 
+# ===== 今日牛基任务（异步 + 进度）=====
+class _TodayBestJobStore:
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._jobs: dict[str, dict] = {}
+
+    def _cleanup_expired_locked(self, now: float):
+        expired_keys = []
+        for job_id, job in self._jobs.items():
+            expires_at = job.get("expires_at")
+            try:
+                expires_at = float(expires_at)
+            except Exception:
+                expires_at = None
+            if expires_at is not None and expires_at <= now:
+                expired_keys.append(job_id)
+        for k in expired_keys:
+            self._jobs.pop(k, None)
+
+    def create(self, params: dict, ttl_seconds: int = 1800) -> dict:
+        job_id = uuid.uuid4().hex
+        now = time.time()
+        job = {
+            "job_id": job_id,
+            "status": "pending",  # pending|running|done|error|canceled
+            "percent": 0,
+            "current_step": {"key": "validate", "label": "校验参数", "message": "准备开始..."},
+            "progress": {"done": 0, "total": 0, "hit": 0, "failed": 0},
+            "params": params or {},
+            "result": None,
+            "error": None,
+            "created_at": now,
+            "updated_at": now,
+            "expires_at": now + int(ttl_seconds or 1800),
+        }
+        with self._lock:
+            self._cleanup_expired_locked(now)
+            self._jobs[job_id] = job
+        return job
+
+    def get(self, job_id: str) -> dict | None:
+        now = time.time()
+        with self._lock:
+            self._cleanup_expired_locked(now)
+            job = self._jobs.get(job_id)
+            if not job:
+                return None
+            expires_at = job.get("expires_at")
+            try:
+                expires_at = float(expires_at)
+            except Exception:
+                expires_at = None
+            if expires_at is not None and expires_at <= now:
+                self._jobs.pop(job_id, None)
+                return None
+            return dict(job)
+
+    def update(self, job_id: str, patch: dict):
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if not job:
+                return
+            job.update(patch or {})
+            job["updated_at"] = time.time()
+
+    def cancel(self, job_id: str) -> bool:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if not job:
+                return False
+            if job.get("status") in {"done", "error", "canceled"}:
+                return True
+            job["status"] = "canceled"
+            job["current_step"] = {"key": "canceled", "label": "已停止", "message": "任务已停止"}
+            job["updated_at"] = time.time()
+            return True
+
+
+_today_best_jobs = _TodayBestJobStore()
+_today_best_executor = ThreadPoolExecutor(max_workers=2)
+
+
+def _parse_today_best_row_from_items(
+    fund_code: str,
+    fund_name: str,
+    items: list[dict],
+    period_code: str,
+) -> dict | None:
+    code = str(fund_code or "").strip()
+    if not code:
+        return None
+    name = str(fund_name or "").strip()
+    p = str(period_code or "Z").strip().upper() or "Z"
+
+    rank = None
+    sc = None
+    syl = None
+    fund_type_value = ""
+    fund_type_name = ""
+
+    def to_int(v):
+        if v is None:
+            return None
+        s = str(v).strip()
+        if not s or s == "--":
+            return None
+        try:
+            return int(float(s))
+        except Exception:
+            return None
+
+    def to_num(v):
+        if v is None:
+            return None
+        s = str(v).replace("%", "").strip()
+        if not s or s == "--":
+            return None
+        try:
+            n = float(s)
+            return n
+        except Exception:
+            return None
+
+    for it in items or []:
+        if not isinstance(it, dict):
+            continue
+        section = str(it.get("section") or "").strip()
+        key = str(it.get("key") or "").strip()
+        value = it.get("value")
+
+        if section == "JDZF":
+            if key == f"{p}.rank":
+                rank = to_int(value)
+            elif key == f"{p}.sc":
+                sc = to_int(value)
+            elif key == f"{p}.syl":
+                syl = to_num(value)
+            continue
+
+        if section == "JJXQ":
+            # 尽量从 JJXQ 中拿到 fund type（字段以实际返回为准）
+            if key in {"FUNDTYPE", "FUNDTYPECODE"}:
+                fund_type_value = str(value or "").strip()
+                if not fund_type_name:
+                    fund_type_name = fund_type_value
+            elif key in {"FUNDTYPENAME"}:
+                fund_type_name = str(value or "").strip()
+
+    # 缺 rank/sc：直接排除
+    if rank is None or sc is None:
+        return None
+
+    if not fund_type_name and fund_type_value:
+        fund_type_name = fund_type_value
+
+    return {
+        "fund_code": code,
+        "fund_name": name,
+        "fund_type_value": fund_type_value,
+        "fund_type_name": fund_type_name,
+        "returnPct": syl,
+        "rank": rank,
+        "sc": sc,
+    }
+
+
+def _run_today_best_job(job_id: str):
+    job = _today_best_jobs.get(job_id)
+    if not job:
+        return
+
+    params = job.get("params") or {}
+    period_code = str(params.get("period_code") or "Z").strip().upper() or "Z"
+
+    try:
+        top_n = int(params.get("top_n") or 1)
+    except Exception:
+        top_n = 1
+    top_n = max(1, min(200, top_n))
+
+    selected_types = params.get("selected_types") or []
+    if not isinstance(selected_types, list):
+        selected_types = []
+    selected_types = [str(x or "").strip() for x in selected_types if str(x or "").strip()]
+    selected_type_set = set(selected_types)
+    has_type_filter = len(selected_type_set) > 0
+
+    min_return = params.get("min_return")
+    if min_return is None or str(min_return).strip() == "":
+        min_return_num = None
+    else:
+        try:
+            min_return_num = float(min_return)
+        except Exception:
+            min_return_num = None
+
+    # 可配置并发（默认 24）
+    max_workers = int(os.environ.get("TODAY_BEST_OVERVIEW_WORKERS", "24") or "24")
+    max_workers = max(1, min(64, max_workers))
+
+    _today_best_jobs.update(job_id, {
+        "status": "running",
+        "percent": 0,
+        "current_step": {"key": "fetch_codes", "label": "加载基金列表", "message": "读取基金代码列表..."},
+    })
+
+    # 候选集：走 FundRepository 缓存
+    fund_list = fund_repository.get_fund_list()
+    code_to_name = {}
+    codes: list[str] = []
+    for x in fund_list or []:
+        if not isinstance(x, dict):
+            continue
+        code = str(x.get("fund_code") or "").strip()
+        if not code:
+            continue
+        codes.append(code)
+        code_to_name[code] = str(x.get("fund_name") or "").strip()
+
+    total = len(codes)
+    _today_best_jobs.update(job_id, {
+        "progress": {"done": 0, "total": total, "hit": 0, "failed": 0},
+        "current_step": {"key": "fetch_overview", "label": "抓取基金详情", "message": f"准备遍历 {total} 只基金..."},
+    })
+
+    # 类型全集（来自 JJXQ）
+    type_map: dict[str, str] = {}
+
+    candidates: list[dict] = []
+    failed = 0
+    done = 0
+
+    def fetch_one(code: str):
+        return fund_repository.get_fund_overview(code)
+
+    try:
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            futures = {ex.submit(fetch_one, code): code for code in codes}
+            for fut in as_completed(futures):
+                code = futures[fut]
+
+                # 支持取消
+                current = _today_best_jobs.get(job_id)
+                if not current or current.get("status") == "canceled":
+                    return
+
+                try:
+                    raw = fut.result()
+                    items = raw if isinstance(raw, list) else []
+                    row = _parse_today_best_row_from_items(code, code_to_name.get(code, ""), items, period_code)
+                    if row:
+                        tv = str(row.get("fund_type_value") or "").strip()
+                        tn = str(row.get("fund_type_name") or "").strip()
+                        if tv:
+                            if tv not in type_map:
+                                type_map[tv] = tn or tv
+
+                        # 类型过滤
+                        if has_type_filter:
+                            if not tv or tv not in selected_type_set:
+                                pass
+                            else:
+                                # 涨幅过滤
+                                if min_return_num is not None:
+                                    rp = row.get("returnPct")
+                                    if isinstance(rp, (int, float)) and float(rp) >= float(min_return_num):
+                                        candidates.append(row)
+                                    else:
+                                        # syl 解析失败或不达标：排除
+                                        pass
+                                else:
+                                    candidates.append(row)
+                        else:
+                            if min_return_num is not None:
+                                rp = row.get("returnPct")
+                                if isinstance(rp, (int, float)) and float(rp) >= float(min_return_num):
+                                    candidates.append(row)
+                            else:
+                                candidates.append(row)
+                except Exception:
+                    failed += 1
+                finally:
+                    done += 1
+                    # 进度更新（粗粒度即可，避免锁竞争）
+                    if done % 20 == 0 or done == total:
+                        percent = int(done * 100 / total) if total > 0 else 100
+                        _today_best_jobs.update(job_id, {
+                            "percent": max(0, min(99, percent)) if done < total else 100,
+                            "progress": {"done": done, "total": total, "hit": len(candidates), "failed": failed},
+                            "current_step": {
+                                "key": "fetch_overview",
+                                "label": "抓取基金详情",
+                                "message": f"已处理 {done}/{total}，命中 {len(candidates)}，失败 {failed}",
+                            },
+                        })
+
+        # 排序 + 截断
+        candidates.sort(key=lambda r: (
+            int(r.get("rank") or 999999),
+            -float(r.get("returnPct")) if isinstance(r.get("returnPct"), (int, float)) else 999999.0,
+            str(r.get("fund_code") or ""),
+        ))
+        rows = candidates[:top_n]
+        types = [{"value": k, "label": v} for k, v in sorted(type_map.items(), key=lambda kv: kv[0])]
+
+        _today_best_jobs.update(job_id, {
+            "status": "done",
+            "percent": 100,
+            "current_step": {"key": "done", "label": "完成", "message": "计算完成"},
+            "result": {"rows": rows, "types": types},
+            "progress": {"done": total, "total": total, "hit": len(rows), "failed": failed},
+        })
+    except Exception as e:
+        _today_best_jobs.update(job_id, {
+            "status": "error",
+            "error": {"message": str(e)},
+            "current_step": {"key": "error", "label": "失败", "message": str(e)},
+        })
+
+
+@app.route('/api/today-best/jobs', methods=['POST'])
+def create_today_best_job():
+    """创建“今日牛基”计算任务（异步 + 进度）。"""
+    try:
+        payload = request.get_json(silent=True) or {}
+        period_code = str(payload.get("period_code") or "Z").strip().upper() or "Z"
+
+        try:
+            top_n = int(payload.get("top_n") or 1)
+        except Exception:
+            top_n = 1
+        top_n = max(1, min(200, top_n))
+
+        selected_types = payload.get("selected_types") or []
+        if not isinstance(selected_types, list):
+            selected_types = []
+
+        min_return = payload.get("min_return")
+        # min_return 允许为空字符串/None 表示不启用
+
+        params = {
+            "period_code": period_code,
+            "top_n": top_n,
+            "selected_types": selected_types,
+            "min_return": min_return,
+        }
+
+        job = _today_best_jobs.create(params, ttl_seconds=1800)
+        job_id = job["job_id"]
+
+        def task():
+            _run_today_best_job(job_id)
+
+        _today_best_executor.submit(task)
+        return jsonify({"success": True, "job_id": job_id})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@app.route('/api/today-best/jobs/<job_id>', methods=['GET'])
+def get_today_best_job(job_id):
+    """获取“今日牛基”任务进度与结果。"""
+    job = _today_best_jobs.get(str(job_id or "").strip())
+    if not job:
+        return jsonify({"success": False, "message": "任务不存在或已过期"}), 404
+    return jsonify({
+        "success": True,
+        "job_id": job.get("job_id"),
+        "status": job.get("status"),
+        "percent": job.get("percent", 0),
+        "current_step": job.get("current_step") or {},
+        "progress": job.get("progress") or {},
+        "result": job.get("result"),
+        "error": job.get("error"),
+        "params": job.get("params") or {},
+    })
+
+
+@app.route('/api/today-best/jobs/<job_id>/cancel', methods=['POST'])
+def cancel_today_best_job(job_id):
+    """停止“今日牛基”任务（尽力而为）。"""
+    ok = _today_best_jobs.cancel(str(job_id or "").strip())
+    if not ok:
+        return jsonify({"success": False, "message": "任务不存在或已过期"}), 404
+    return jsonify({"success": True, "job_id": str(job_id or "").strip()})
+
+
 def _build_steps_snapshot():
     # 与前端 AiPick._stepDefs 保持一致（key 稳定）
     return [

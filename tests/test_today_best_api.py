@@ -53,7 +53,42 @@ class TestTodayBestApis(unittest.TestCase):
             self.assertIn("000001", payload["items_by_code"])
             self.assertIn("bad", payload["errors"])
 
+    def test_today_best_job_create_and_get_done(self):
+        # 让任务同步执行：patch executor.submit 直接调用
+        with patch.object(app_module, "_today_best_executor") as ex:
+            def submit(fn, *args, **kwargs):
+                fn()
+                class _F:  # minimal future-like
+                    def result(self, *a, **k):
+                        return None
+                return _F()
+            ex.submit.side_effect = submit
+
+            # patch run 函数：直接写入 done 结果，避免真实遍历
+            with patch.object(app_module, "_run_today_best_job") as runner:
+                def run(job_id: str):
+                    app_module._today_best_jobs.update(job_id, {
+                        "status": "done",
+                        "percent": 100,
+                        "progress": {"done": 1, "total": 1, "hit": 1, "failed": 0},
+                        "result": {"rows": [{"fund_code": "000001"}], "types": [{"value": "1", "label": "类型"}]},
+                    })
+                runner.side_effect = run
+
+                resp = self.client.post("/api/today-best/jobs", json={"period_code": "Z", "top_n": 1})
+                self.assertEqual(resp.status_code, 200)
+                payload = resp.get_json() or {}
+                self.assertTrue(payload.get("success"))
+                job_id = payload.get("job_id")
+                self.assertTrue(job_id)
+
+                resp2 = self.client.get(f"/api/today-best/jobs/{job_id}")
+                self.assertEqual(resp2.status_code, 200)
+                data = resp2.get_json() or {}
+                self.assertTrue(data.get("success"))
+                self.assertEqual(data.get("status"), "done")
+                self.assertIn("result", data)
+
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -39,6 +39,8 @@ const FundSelector = {
     todayBestRunning: false,
     todayBestAbortController: null,
     todayBestProgress: { done: 0, total: 0, hit: 0, failed: 0 },
+    todayBestJobId: '',
+    todayBestPollTimer: null,
 
     init: function() {
         this.bindEvents();
@@ -776,10 +778,20 @@ const FundSelector = {
     },
 
     stopTodayBest: function() {
-        if (this.todayBestAbortController) {
-            try { this.todayBestAbortController.abort(); } catch (e) { /* ignore */ }
+        // 取消轮询
+        if (this.todayBestPollTimer) {
+            try { clearInterval(this.todayBestPollTimer); } catch (e) { /* ignore */ }
         }
+        this.todayBestPollTimer = null;
+
+        // 取消后端任务（尽力而为）
+        const jobId = String(this.todayBestJobId || '').trim();
+        if (jobId) {
+            fetch(`/api/today-best/jobs/${encodeURIComponent(jobId)}/cancel`, { method: 'POST' }).catch(() => {});
+        }
+
         this.todayBestAbortController = null;
+        this.todayBestJobId = '';
         this.todayBestRunning = false;
         this.renderTodayBestProgress();
     },
@@ -791,138 +803,107 @@ const FundSelector = {
         if (opts.clear) {
             this.todayBestRows = [];
             this.todayBestProgress = { done: 0, total: 0, hit: 0, failed: 0 };
-            // 类型列表来自 overview 解析，实时补全；清空后重新收集
             this.todayBestAllTypes = [];
+            this.todayBestJobId = '';
             this.render();
         }
 
-        this.todayBestRunning = true;
-        this.todayBestAbortController = new AbortController();
-        const signal = this.todayBestAbortController.signal;
-
+        // 创建后端任务
         const periodCode = String(this.todayBestPeriodCode || 'Z').trim() || 'Z';
         const topN = Math.max(1, Math.min(200, parseInt(String(this.todayBestTopN || 1), 10) || 1));
         const minReturn = (this.todayBestMinReturn === null || this.todayBestMinReturn === undefined) ? null : Number(this.todayBestMinReturn);
         const selectedTypes = (this.todayBestSelectedTypes instanceof Set) ? this.todayBestSelectedTypes : new Set();
-        const hasTypeFilter = selectedTypes.size > 0; // 非空表示“限制到这些类型”；空表示“不限制”
-
-        const toNum = (v) => {
-            if (v === null || v === undefined) return null;
-            const s = String(v).replace('%', '').trim();
-            if (!s || s === '--') return null;
-            const n = Number(s);
-            return Number.isFinite(n) ? n : null;
-        };
+        const selectedTypesArr = Array.from(selectedTypes);
 
         try {
-            // 1) 拉全量 codes
-            const res = await fetch('/api/funds/all-codes', { signal });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const payload = await res.json();
-            if (!payload || !payload.success) throw new Error(payload && payload.message ? payload.message : '加载基金代码失败');
-            const items = Array.isArray(payload.items) ? payload.items : [];
-
-            const codeToName = {};
-            const codes = [];
-            items.forEach(x => {
-                if (!x) return;
-                const code = String(x.fund_code || '').trim();
-                if (!code) return;
-                codes.push(code);
-                codeToName[code] = String(x.fund_name || '').trim();
-            });
-
-            this.todayBestProgress = { done: 0, total: codes.length, hit: 0, failed: 0 };
+            this.todayBestRunning = true;
             this.renderTodayBestProgress();
+            this.render();
 
-            // 2) 分批拉 overview
-            const batchSize = 80;
-            const candidates = [];
-            const typeMap = new Map(); // value -> label
+            const res = await fetch('/api/today-best/jobs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    period_code: periodCode,
+                    top_n: topN,
+                    min_return: (minReturn === null || minReturn === undefined || Number.isNaN(minReturn)) ? null : minReturn,
+                    selected_types: selectedTypesArr
+                })
+            });
+            const payload = await res.json();
+            if (!res.ok || !payload || !payload.success) {
+                throw new Error(payload && payload.message ? payload.message : `HTTP ${res.status}`);
+            }
+            const jobId = String(payload.job_id || '').trim();
+            if (!jobId) throw new Error('任务创建失败：job_id 为空');
+            this.todayBestJobId = jobId;
 
-            for (let i = 0; i < codes.length; i += batchSize) {
-                if (signal.aborted) throw new Error('aborted');
-                const batch = codes.slice(i, i + batchSize);
-
-                const r = await fetch('/api/funds/overview-batch', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ fund_codes: batch }),
-                    signal
-                });
-                if (!r.ok) throw new Error(`HTTP ${r.status}`);
-                const data = await r.json();
-                if (!data || !data.success) throw new Error(data && data.message ? data.message : '批量加载失败');
-
-                const itemsByCode = data.items_by_code || {};
-                const errors = data.errors || {};
-
-                this.todayBestProgress.failed += Object.keys(errors).length;
-
-                batch.forEach(code => {
-                    const its = itemsByCode[code];
-                    if (!Array.isArray(its) || its.length === 0) {
-                        return;
+            // 轮询进度
+            if (this.todayBestPollTimer) {
+                try { clearInterval(this.todayBestPollTimer); } catch (e) {}
+            }
+            const pollOnce = async () => {
+                const id = String(this.todayBestJobId || '').trim();
+                if (!id) return;
+                try {
+                    const r = await fetch(`/api/today-best/jobs/${encodeURIComponent(id)}`);
+                    const data = await r.json();
+                    if (!r.ok || !data || !data.success) {
+                        throw new Error(data && data.message ? data.message : `HTTP ${r.status}`);
                     }
-                    const row = this.parseOverviewItemsToTodayBestRow(code, codeToName[code] || '', its, periodCode);
-                    if (!row) return;
+                    const status = String(data.status || '').trim();
+                    const prog = data.progress || {};
+                    this.todayBestProgress = {
+                        done: Number(prog.done || 0) || 0,
+                        total: Number(prog.total || 0) || 0,
+                        hit: Number(prog.hit || 0) || 0,
+                        failed: Number(prog.failed || 0) || 0,
+                    };
+                    this.todayBestRunning = status === 'running' || status === 'pending';
+                    this.renderTodayBestProgress();
 
-                    // 收集类型候选
-                    if (row.fund_type_value) {
-                        if (!typeMap.has(row.fund_type_value)) {
-                            typeMap.set(row.fund_type_value, row.fund_type_name || row.fund_type_value);
+                    if (status === 'done') {
+                        const result = data.result || {};
+                        this.todayBestRows = Array.isArray(result.rows) ? result.rows : [];
+                        this.todayBestAllTypes = Array.isArray(result.types) ? result.types : [];
+                        this.todayBestSelectedTypes = new Set(); // done 后默认“不限制”，用户可重新勾选并刷新
+                        this.todayBestRunning = false;
+                        this.render();
+                        showToast(`计算完成：命中${this.todayBestRows.length}，失败${this.todayBestProgress.failed}`, 'success');
+                        if (this.todayBestPollTimer) {
+                            try { clearInterval(this.todayBestPollTimer); } catch (e) {}
+                            this.todayBestPollTimer = null;
+                        }
+                    } else if (status === 'error') {
+                        const msg = (data.error && data.error.message) ? data.error.message : '任务失败';
+                        this.todayBestRunning = false;
+                        this.render();
+                        showToast('今日牛基计算失败: ' + msg, 'error');
+                        if (this.todayBestPollTimer) {
+                            try { clearInterval(this.todayBestPollTimer); } catch (e) {}
+                            this.todayBestPollTimer = null;
+                        }
+                    } else if (status === 'canceled') {
+                        this.todayBestRunning = false;
+                        this.render();
+                        if (this.todayBestPollTimer) {
+                            try { clearInterval(this.todayBestPollTimer); } catch (e) {}
+                            this.todayBestPollTimer = null;
                         }
                     }
+                } catch (e) {
+                    // 轮询失败：不频繁 toast，留在进度区即可
+                } finally {
+                    this.renderTodayBestProgress();
+                }
+            };
 
-                    // 类型筛选
-                    if (hasTypeFilter) {
-                        if (!row.fund_type_value || !selectedTypes.has(row.fund_type_value)) return;
-                    }
-
-                    // 最小涨幅筛选
-                    if (minReturn !== null && minReturn !== undefined && Number.isFinite(minReturn)) {
-                        const rp = (typeof row.returnPct === 'number' && Number.isFinite(row.returnPct)) ? row.returnPct : null;
-                        if (rp === null) return;
-                        if (rp < minReturn) return;
-                    }
-
-                    candidates.push(row);
-                });
-
-                this.todayBestProgress.done = Math.min(codes.length, i + batch.length);
-                this.todayBestProgress.hit = candidates.length;
-
-                // 类型列表实时补全（不影响口径：类型仍来自 overview）
-                this.todayBestAllTypes = Array.from(typeMap.entries()).map(([value, label]) => ({ value, label }));
-                this.renderTodayBestTypeOptions();
-                this.renderTodayBestProgress();
-            }
-
-            // 3) 排序 + 截断
-            candidates.sort((a, b) => {
-                const ar = (a.rank === null || a.rank === undefined) ? 999999 : a.rank;
-                const br = (b.rank === null || b.rank === undefined) ? 999999 : b.rank;
-                if (ar !== br) return ar - br;
-                const asyl = (typeof a.returnPct === 'number' && Number.isFinite(a.returnPct)) ? a.returnPct : -999999;
-                const bsyl = (typeof b.returnPct === 'number' && Number.isFinite(b.returnPct)) ? b.returnPct : -999999;
-                if (asyl !== bsyl) return bsyl - asyl;
-                return String(a.fund_code || '').localeCompare(String(b.fund_code || ''));
-            });
-
-            this.todayBestRows = candidates.slice(0, topN);
-            this.todayBestProgress.hit = this.todayBestRows.length;
-            this.todayBestRunning = false;
-            this.render();
-            showToast(`计算完成：命中${this.todayBestProgress.hit}，失败${this.todayBestProgress.failed}`, 'success');
+            // 先立即 poll 一次，再定时
+            await pollOnce();
+            this.todayBestPollTimer = setInterval(() => { void pollOnce(); }, 1200);
         } catch (e) {
-            if (String(e && e.message ? e.message : e).includes('aborted')) {
-                // 用户主动停止：不提示错误
-            } else {
-                showToast('今日牛基计算失败: ' + (e && e.message ? e.message : String(e)), 'error');
-            }
-        } finally {
             this.todayBestRunning = false;
-            this.todayBestAbortController = null;
+            showToast('今日牛基任务启动失败: ' + (e && e.message ? e.message : String(e)), 'error');
             this.renderTodayBestProgress();
             this.render();
         }
