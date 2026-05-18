@@ -4,6 +4,7 @@ import csv
 import json
 import uuid
 from datetime import datetime, date, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from strategies import registry as strategy_registry
 from strategies.backtest import run_backtest
@@ -1653,6 +1654,74 @@ def get_fund_types():
         return jsonify({"success": True, "items": FUND_TYPE_OPTIONS_EASTMONEY})
     except Exception as e:
         return jsonify({"success": False, "message": str(e), "items": []}), 500
+
+
+@app.route('/api/funds/all-codes', methods=['GET'])
+def get_funds_all_codes():
+    """获取全量基金代码列表（用于遍历候选集）。"""
+    try:
+        items = fund_repository.get_fund_list()
+        out = []
+        for x in items or []:
+            if not isinstance(x, dict):
+                continue
+            code = str(x.get("fund_code") or "").strip()
+            name = str(x.get("fund_name") or "").strip()
+            if not code:
+                continue
+            out.append({"fund_code": code, "fund_name": name})
+        return jsonify({"success": True, "items": out})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e), "items": []}), 500
+
+
+@app.route('/api/funds/overview-batch', methods=['POST'])
+def get_fund_overview_batch():
+    """
+    批量获取基金详情（overview items）。
+
+    入参：{"fund_codes":[...]}（单次最多 100）
+    返回：{success, items_by_code, errors}
+    """
+    try:
+        payload = request.get_json(silent=True) or {}
+        codes = payload.get("fund_codes")
+        if not isinstance(codes, list):
+            return jsonify({"success": False, "message": "fund_codes 必须为数组", "items_by_code": {}, "errors": {}}), 400
+
+        fund_codes: list[str] = []
+        for c in codes:
+            s = str(c or "").strip()
+            if s:
+                fund_codes.append(s)
+
+        if len(fund_codes) > 100:
+            return jsonify({"success": False, "message": "fund_codes 单次最多 100", "items_by_code": {}, "errors": {}}), 400
+
+        items_by_code: dict[str, list] = {}
+        errors: dict[str, str] = {}
+
+        if len(fund_codes) == 0:
+            return jsonify({"success": True, "items_by_code": items_by_code, "errors": errors})
+
+        def _fetch_one(code: str):
+            return fund_repository.get_fund_overview(code)
+
+        with ThreadPoolExecutor(max_workers=12) as ex:
+            future_map = {ex.submit(_fetch_one, code): code for code in fund_codes}
+            for fut in as_completed(future_map):
+                code = future_map[fut]
+                try:
+                    raw = fut.result()
+                    # 统一成 list items（与 /api/funds/<code>/overview 输出一致）
+                    items = raw if isinstance(raw, list) else []
+                    items_by_code[code] = items
+                except Exception as e:
+                    errors[code] = str(e)
+
+        return jsonify({"success": True, "items_by_code": items_by_code, "errors": errors})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e), "items_by_code": {}, "errors": {}}), 500
 
 
 @app.route('/api/funds', methods=['GET'])
