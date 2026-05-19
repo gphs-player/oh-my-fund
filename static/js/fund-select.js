@@ -449,8 +449,8 @@ const FundSelector = {
         const rowsHtml = safeItems.map((item, index) => {
             const fundCode = item && item.fund_code ? String(item.fund_code) : '-';
             const rawName = item && item.fund_name ? String(item.fund_name) : '-';
-            // 基金名称：最多 15 个汉字；超出则按“前9…后6”展示
-            const fundName = rawName.length > 15 ? (rawName.slice(0, 9) + '…' + rawName.slice(-6)) : rawName;
+            // 基金名称：最多 15 个汉字；超出则按“前9…后5”展示
+            const fundName = rawName.length > 15 ? (rawName.slice(0, 9) + '…' + rawName.slice(-5)) : rawName;
 
             const raw = item ? item.percentage : null;
             const value = (raw === null || raw === undefined || raw === '' || Number.isNaN(Number(raw))) ? null : Number(raw);
