@@ -715,9 +715,6 @@ const FundSelector = {
 
     switchScope: function(scope) {
         if (scope !== 'all' && scope !== 'favorite' && scope !== 'today-best') return;
-        if (this.selectedScope === 'today-best' && scope !== 'today-best') {
-            this.stopTodayBest();
-        }
         this.selectedScope = scope;
         this.applyFilters();
     },
