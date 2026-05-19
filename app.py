@@ -15,6 +15,7 @@ from warehouse.ai_fund_pick.planner import FundPickPlanError, build_fund_pick_pl
 from warehouse.ai_fund_pick.capabilities import CAPABILITIES_V1
 from warehouse.ai_fund_pick.missing import build_missing_items, missing_signature
 from warehouse.paths import STORE_DIR, migrate_data_layout_if_needed
+from warehouse import paths as warehouse_paths
 
 app = Flask(__name__)
 
@@ -2260,6 +2261,113 @@ def _parse_today_best_row_from_items(
     }
 
 
+def _extract_today_best_metrics_from_items(items: list[dict], period_code: str) -> dict:
+    """
+    从 overview items 中提取今日牛基需要的字段，允许缺失（用于全量审计 CSV）。
+    返回字段：
+    - rank/sc/returnPct（可能为 None）
+    - fund_type_value/fund_type_name（可能为空字符串）
+    """
+    p = str(period_code or "Z").strip().upper() or "Z"
+
+    rank = None
+    sc = None
+    syl = None
+    fund_type_value = ""
+    fund_type_name = ""
+
+    def to_int(v):
+        if v is None:
+            return None
+        s = str(v).strip()
+        if not s or s == "--":
+            return None
+        try:
+            return int(float(s))
+        except Exception:
+            return None
+
+    def to_num(v):
+        if v is None:
+            return None
+        s = str(v).replace("%", "").strip()
+        if not s or s == "--":
+            return None
+        try:
+            return float(s)
+        except Exception:
+            return None
+
+    for it in items or []:
+        if not isinstance(it, dict):
+            continue
+        section = str(it.get("section") or "").strip()
+        key = str(it.get("key") or "").strip()
+        value = it.get("value")
+
+        if section == "JDZF":
+            if key == f"{p}.rank":
+                rank = to_int(value)
+            elif key == f"{p}.sc":
+                sc = to_int(value)
+            elif key == f"{p}.syl":
+                syl = to_num(value)
+            continue
+
+        if section == "JJXQ":
+            if key in {"FUNDTYPE", "FUNDTYPECODE"}:
+                fund_type_value = str(value or "").strip()
+                if not fund_type_name:
+                    fund_type_name = fund_type_value
+            elif key in {"FUNDTYPENAME"}:
+                fund_type_name = str(value or "").strip()
+
+    if not fund_type_name and fund_type_value:
+        fund_type_name = fund_type_value
+
+    return {
+        "fund_type_value": fund_type_value,
+        "fund_type_name": fund_type_name,
+        "returnPct": syl,
+        "rank": rank,
+        "sc": sc,
+    }
+
+
+def _write_today_best_audit_csv(job_id: str, period_code: str, audit_rows: list[dict]) -> str:
+    """
+    写入“今日牛基”全量审计 CSV（每次任务生成一个新文件）。
+    返回写入的文件名（不含目录）。
+    """
+    os.makedirs(warehouse_paths.CACHE_TODAY_BEST_DIR, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{ts}_{str(job_id or '').strip()}.csv"
+    file_path = os.path.join(warehouse_paths.CACHE_TODAY_BEST_DIR, filename)
+
+    fields = [
+        "fund_code",
+        "fund_name",
+        "period_code",
+        "return_pct",
+        "rank",
+        "sc",
+        "fund_type_value",
+        "fund_type_name",
+        "is_match",
+        "unmatch_reasons",
+    ]
+
+    with open(file_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fields)
+        writer.writeheader()
+        for r in audit_rows or []:
+            row = dict(r or {})
+            row["period_code"] = str(period_code or "Z").strip().upper() or "Z"
+            writer.writerow({k: row.get(k, "") for k in fields})
+
+    return filename
+
+
 def _run_today_best_job(job_id: str):
     job = _today_best_jobs.get(job_id)
     if not job:
@@ -2323,6 +2431,7 @@ def _run_today_best_job(job_id: str):
     type_map: dict[str, str] = {}
 
     candidates: list[dict] = []
+    audit_rows: list[dict] = []
     failed = 0
     done = 0
 
@@ -2343,38 +2452,74 @@ def _run_today_best_job(job_id: str):
                 try:
                     raw = fut.result()
                     items = raw if isinstance(raw, list) else []
-                    row = _parse_today_best_row_from_items(code, code_to_name.get(code, ""), items, period_code)
-                    if row:
-                        tv = str(row.get("fund_type_value") or "").strip()
-                        tn = str(row.get("fund_type_name") or "").strip()
-                        if tv:
-                            if tv not in type_map:
-                                type_map[tv] = tn or tv
+                    metrics = _extract_today_best_metrics_from_items(items, period_code)
 
-                        # 类型过滤
-                        if has_type_filter:
-                            if not tv or tv not in selected_type_set:
-                                pass
-                            else:
-                                # 涨幅过滤
-                                if min_return_num is not None:
-                                    rp = row.get("returnPct")
-                                    if isinstance(rp, (int, float)) and float(rp) >= float(min_return_num):
-                                        candidates.append(row)
-                                    else:
-                                        # syl 解析失败或不达标：排除
-                                        pass
-                                else:
-                                    candidates.append(row)
+                    tv = str(metrics.get("fund_type_value") or "").strip()
+                    tn = str(metrics.get("fund_type_name") or "").strip()
+                    rp = metrics.get("returnPct")
+                    rank = metrics.get("rank")
+                    sc = metrics.get("sc")
+
+                    if tv:
+                        if tv not in type_map:
+                            type_map[tv] = tn or tv
+
+                    reasons: list[str] = []
+
+                    # 基础字段校验：缺 rank/sc 直接判定不命中
+                    if rank is None or sc is None:
+                        reasons.append("缺少同类排名或总数")
+
+                    # 类型过滤
+                    if has_type_filter:
+                        if not tv or tv not in selected_type_set:
+                            reasons.append("类型不匹配")
+
+                    # 涨幅过滤
+                    if min_return_num is not None:
+                        if not isinstance(rp, (int, float)):
+                            reasons.append("涨幅缺失")
                         else:
-                            if min_return_num is not None:
-                                rp = row.get("returnPct")
-                                if isinstance(rp, (int, float)) and float(rp) >= float(min_return_num):
-                                    candidates.append(row)
-                            else:
-                                candidates.append(row)
+                            if float(rp) < float(min_return_num):
+                                reasons.append(f"涨幅不足(<{min_return_num}>)")
+
+                    is_match = 1 if len(reasons) == 0 else 0
+
+                    audit_rows.append({
+                        "fund_code": str(code or "").strip(),
+                        "fund_name": str(code_to_name.get(code, "") or "").strip(),
+                        "return_pct": "" if not isinstance(rp, (int, float)) else float(rp),
+                        "rank": "" if rank is None else int(rank),
+                        "sc": "" if sc is None else int(sc),
+                        "fund_type_value": tv,
+                        "fund_type_name": tn,
+                        "is_match": str(is_match),
+                        "unmatch_reasons": "" if is_match == 1 else "|".join(reasons),
+                    })
+
+                    if is_match == 1:
+                        candidates.append({
+                            "fund_code": str(code or "").strip(),
+                            "fund_name": str(code_to_name.get(code, "") or "").strip(),
+                            "fund_type_value": tv,
+                            "fund_type_name": tn,
+                            "returnPct": rp,
+                            "rank": rank,
+                            "sc": sc,
+                        })
                 except Exception:
                     failed += 1
+                    audit_rows.append({
+                        "fund_code": str(code or "").strip(),
+                        "fund_name": str(code_to_name.get(code, "") or "").strip(),
+                        "return_pct": "",
+                        "rank": "",
+                        "sc": "",
+                        "fund_type_value": "",
+                        "fund_type_name": "",
+                        "is_match": "0",
+                        "unmatch_reasons": "抓取基金详情失败",
+                    })
                 finally:
                     done += 1
                     # 进度更新（粗粒度即可，避免锁竞争）
@@ -2399,11 +2544,13 @@ def _run_today_best_job(job_id: str):
         rows = candidates[:top_n]
         types = [{"value": k, "label": v} for k, v in sorted(type_map.items(), key=lambda kv: kv[0])]
 
+        csv_file = _write_today_best_audit_csv(job_id, period_code, audit_rows)
+
         _today_best_jobs.update(job_id, {
             "status": "done",
             "percent": 100,
             "current_step": {"key": "done", "label": "完成", "message": "计算完成"},
-            "result": {"rows": rows, "types": types},
+            "result": {"rows": rows, "types": types, "csv_file": csv_file},
             "progress": {"done": total, "total": total, "hit": len(rows), "failed": failed},
         })
     except Exception as e:
