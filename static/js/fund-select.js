@@ -677,10 +677,7 @@ const FundSelector = {
 
     applyFilters: function() {
         if (this.selectedScope === 'today-best') {
-            // 今日牛基：进入即自动计算一次；调整条件后由“刷新”显式触发重算
-            if (!this.todayBestRunning) {
-                void this.startTodayBest({ clear: true });
-            }
+            // 今日牛基：不自动计算；由“刷新”显式触发重算
             this.render();
             return;
         }
