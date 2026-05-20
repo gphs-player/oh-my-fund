@@ -14,7 +14,6 @@ CACHE_DIR = os.path.join(DATA_DIR, "cache")
 CACHE_FUNDS_LIST_DIR = os.path.join(CACHE_DIR, "funds_list")
 CACHE_FUND_HISTORY_VALUE_DIR = os.path.join(CACHE_DIR, "fund_history_value")
 CACHE_AI_ANALYSIS_DIR = os.path.join(CACHE_DIR, "ai_analysis")
-CACHE_TODAY_BEST_DIR = os.path.join(CACHE_DIR, "today_best")
 
 BACKUP_DIR = os.path.join(DATA_DIR, "_backup")
 
@@ -24,7 +23,6 @@ def ensure_dirs():
     os.makedirs(CACHE_FUNDS_LIST_DIR, exist_ok=True)
     os.makedirs(CACHE_FUND_HISTORY_VALUE_DIR, exist_ok=True)
     os.makedirs(CACHE_AI_ANALYSIS_DIR, exist_ok=True)
-    os.makedirs(CACHE_TODAY_BEST_DIR, exist_ok=True)
     os.makedirs(BACKUP_DIR, exist_ok=True)
 
 

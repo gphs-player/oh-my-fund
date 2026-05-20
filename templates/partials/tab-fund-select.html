@@ -7,7 +7,6 @@
                     <button type="button" id="fund-scope-all" class="btn btn-sm btn-primary" onclick="FundSelector.switchScope('all')">全部</button>
                     <button type="button" id="fund-scope-favorite" class="btn btn-sm btn-outline" onclick="FundSelector.switchScope('favorite')">自选</button>
                     <button type="button" id="fund-share-button" class="btn btn-sm btn-outline" onclick="FundSelector.openSharePoster()">分享</button>
-                    <button type="button" id="fund-scope-today-best" class="btn btn-sm btn-outline" onclick="FundSelector.switchScope('today-best')">今日牛基</button>
                 </div>
             </div>
 
@@ -31,76 +30,6 @@
                     <select id="fund-search-type" class="select select-bordered h-9 min-h-9">
                         <option value="">全部类型</option>
                     </select>
-                </div>
-            </div>
-
-            <!-- 今日牛基：专用筛选区（默认隐藏，由 JS 按 scope 控制显示） -->
-            <div id="today-best-filters" class="hidden mt-2">
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <div class="form-control mb-0">
-                        <label class="label"><span class="label-text">周期</span></label>
-                        <select id="today-best-period" class="select select-bordered h-9 min-h-9">
-                            <option value="Z">近1周</option>
-                            <option value="Y">近1月</option>
-                            <option value="3Y">近3月</option>
-                            <option value="6Y">近6月</option>
-                            <option value="1N">近1年</option>
-                            <option value="2N">近2年</option>
-                            <option value="3N">近3年</option>
-                            <option value="5N">近5年</option>
-                            <option value="JN">今年来</option>
-                            <option value="LN">成立来</option>
-                        </select>
-                    </div>
-
-                    <div class="form-control mb-0">
-                        <label class="label"><span class="label-text">TopN</span></label>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <input id="today-best-topn" type="number" min="1" max="200" class="input input-bordered h-9 min-h-9 w-28" value="1" />
-                            <div class="flex flex-wrap items-center gap-1">
-                                <button type="button" class="btn btn-xs btn-outline" onclick="FundSelector.setTodayBestTopN(1)">1</button>
-                                <button type="button" class="btn btn-xs btn-outline" onclick="FundSelector.setTodayBestTopN(3)">3</button>
-                                <button type="button" class="btn btn-xs btn-outline" onclick="FundSelector.setTodayBestTopN(5)">5</button>
-                                <button type="button" class="btn btn-xs btn-outline" onclick="FundSelector.setTodayBestTopN(10)">10</button>
-                                <button type="button" class="btn btn-xs btn-outline" onclick="FundSelector.setTodayBestTopN(20)">20</button>
-                                <button type="button" class="btn btn-xs btn-outline" onclick="FundSelector.setTodayBestTopN(50)">50</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-control mb-0">
-                        <label class="label"><span class="label-text">基金类型（多选）</span></label>
-                        <div class="dropdown dropdown-bottom w-full">
-                            <label tabindex="0" class="btn btn-sm btn-outline w-full justify-between">
-                                <span id="today-best-type-label" class="truncate">全部类型</span>
-                                <span>▾</span>
-                            </label>
-                            <div tabindex="0" class="dropdown-content z-[10] mt-2 p-2 shadow bg-base-300 rounded-box w-full border border-white/10 max-h-64 overflow-y-auto">
-                                <div class="flex items-center justify-between gap-2 mb-2">
-                                    <button type="button" class="btn btn-xs btn-outline" onclick="FundSelector.todayBestSelectAllTypes()">全选</button>
-                                    <button type="button" class="btn btn-xs btn-outline" onclick="FundSelector.todayBestClearTypes()">清空</button>
-                                </div>
-                                <div id="today-best-type-list" class="space-y-1">
-                                    <!-- 动态填充 -->
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-control mb-0">
-                        <label class="label"><span class="label-text">最小涨幅（%）</span></label>
-                        <input id="today-best-min-return" type="number" step="0.01" class="input input-bordered h-9 min-h-9" placeholder="例如 0 或 1.5（留空表示不过滤）" />
-                    </div>
-                </div>
-
-                <div class="flex flex-wrap items-center justify-between gap-3 mt-3">
-                    <div id="today-best-progress" class="text-sm text-slate-300">
-                        未开始计算
-                    </div>
-                    <div class="flex flex-wrap items-center gap-2">
-                        <button type="button" class="btn btn-sm btn-primary" onclick="FundSelector.refreshTodayBest()">刷新</button>
-                        <button type="button" class="btn btn-sm btn-outline" onclick="FundSelector.stopTodayBest()">停止</button>
-                    </div>
                 </div>
             </div>
 
@@ -170,27 +99,6 @@
                 </div>
             </div>
 
-            <!-- 今日牛基：结果表（默认隐藏，由 JS 按 scope 控制显示） -->
-            <div id="today-best-table-wrapper" class="hidden mt-6">
-                <div class="overflow-x-auto">
-                    <table class="table table-zebra w-full fund-select-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 6%;">序号</th>
-                                <th style="width: 12%;">基金代码</th>
-                                <th style="width: 30%;">基金名称</th>
-                                <th style="width: 12%;">基金类型</th>
-                                <th style="width: 10%;">涨幅</th>
-                                <th style="width: 12%;">同类排名</th>
-                                <th style="width: 18%;">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody id="today-best-table-body">
-                            <!-- 动态填充 -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
         </div>
     </div>
 </div>
