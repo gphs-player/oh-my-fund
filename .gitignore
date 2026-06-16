@@ -3,6 +3,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
+.ipynb_checkpoints
+.ruff_cache
 .Python
 env/
 venv/

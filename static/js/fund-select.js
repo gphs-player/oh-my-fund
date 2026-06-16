@@ -373,8 +373,8 @@ const FundSelector = {
     },
 
     waitSharePosterAssetsReady: async function(doc) {
-        // 等图片资源加载完成，避免截图空白（背景/二维码）
-        const imgs = Array.from(doc.querySelectorAll('img[data-role="poster-bg"], img[data-role="poster-qr"]'));
+        // 等图片资源加载完成，避免截图空白（当前仅背景图）
+        const imgs = Array.from(doc.querySelectorAll('img[data-role="poster-bg"]'));
         if (!imgs.length) return;
 
         const waitOne = async (img) => {
@@ -402,16 +402,25 @@ const FundSelector = {
         }
     },
 
+    getSharePosterDateText: function(date) {
+        const targetDate = date instanceof Date ? date : new Date();
+        const year = targetDate.getFullYear();
+        const month = targetDate.getMonth() + 1;
+        const day = targetDate.getDate();
+        return `注:以下内容不构成任何投资建议`;
+    },
+
     buildSharePosterHtml: function(items, bgDataUrl) {
         const safeItems = Array.isArray(items) ? items : [];
         const bgSrc = bgDataUrl ? String(bgDataUrl) : '/static/images/share_bg.png';
-        const qrSrc = '/static/images/qr.png';
+        const dateText = this.getSharePosterDateText(new Date());
 
         const rowsHtml = safeItems.map((item, index) => {
             const fundCode = item && item.fund_code ? String(item.fund_code) : '-';
             const rawName = item && item.fund_name ? String(item.fund_name) : '-';
             // 基金名称：最多 15 个汉字；超出则按“前9…后5”展示
             const fundName = rawName.length > 15 ? (rawName.slice(0, 9) + '…' + rawName.slice(-5)) : rawName;
+            const rank = index + 1;
 
             const raw = item ? item.percentage : null;
             const value = (raw === null || raw === undefined || raw === '' || Number.isNaN(Number(raw))) ? null : Number(raw);
@@ -427,13 +436,13 @@ const FundSelector = {
                 else pctClass = 'color: rgba(226,232,240,0.90); font-weight: 700;';
             }
 
-            // 只保留“表格对齐感”，不显示任何行底色块
-            const rowBg = 'background: transparent;';
+            const rowBg = index % 2 === 0 ? 'rgba(255,255,255,0.015)' : 'transparent';
             return `
-                <tr style="${rowBg}">
-                    <td style="padding: 14px 18px; width: 150px; font-size: 28px; letter-spacing: 0.5px; color: rgba(241,245,249,0.95); font-weight: 700;">${fundCode}</td>
-                    <td style="padding: 14px 18px; font-size: 30px; color: rgba(241,245,249,0.95); font-weight: 700;">${fundName}</td>
-                    <td style="padding: 14px 18px; width: 160px; text-align: right; font-size: 30px; ${pctClass}">${pctText}</td>
+                <tr style="background:${rowBg};">
+                    <td style="padding: 15px 10px 15px 20px; width: 72px; border-bottom: 1px solid rgba(148,163,184,0.16); text-align:center; font-size:22px; color: rgba(241,245,249,0.92); font-weight:700;">${rank}</td>
+                    <td style="padding: 15px 14px; width: 156px; border-bottom: 1px solid rgba(148,163,184,0.16); font-size: 22px; letter-spacing: 0.2px; color: rgba(148,163,184,0.96); font-weight: 600;">${fundCode}</td>
+                    <td style="padding: 15px 14px; border-bottom: 1px solid rgba(148,163,184,0.16); font-size: 26px; color: rgba(248,250,252,0.98); font-weight: 700;">${fundName}</td>
+                    <td style="padding: 15px 20px 15px 14px; width: 168px; border-bottom: 1px solid rgba(148,163,184,0.16); text-align: right; font-size: 27px; ${pctClass}">${pctText}</td>
                 </tr>
             `;
         }).join('');
@@ -450,12 +459,24 @@ const FundSelector = {
 <body style="margin:0; padding:0; background:#000;">
     <div id="fund-share-poster-root" style="position: relative; width:1080px; height:1920px; overflow:hidden;">
         <img data-role="poster-bg" src="${bgSrc}" style="position:absolute; inset:-60px; width:1200px; height:2040px; object-fit:cover; transform: scale(1.06); transform-origin:center;" crossorigin="anonymous" />
-        <div style="position:absolute; inset:0; background: rgba(0,0,0,0.34);"></div>
+        <div style="position:absolute; inset:0; background: linear-gradient(180deg, rgba(2,6,23,0.72), rgba(15,23,42,0.80));"></div>
 
-        <!-- 表格区域：为底部二维码留出空间 -->
-        <div style="position:absolute; left:72px; right:72px; top:96px; bottom:300px;">
-            <div style="position:absolute; inset:0; padding: 28px;">
-                <table style="width: 100%; border-collapse: collapse; table-layout: fixed;">
+        <div style="position:absolute; left:80px; right:80px; top:80px;">
+            
+            <div style="margin-top:12px; font-size:24px; line-height:1.4; font-weight:500; color:rgba(191,219,254,0.92);">${dateText}</div>
+        </div>
+
+        <div style="position:absolute; left:68px; right:68px; top:198px; bottom:116px; border-radius:24px; border:1px solid rgba(148,163,184,0.22); box-shadow:0 18px 48px rgba(2,6,23,0.20); overflow:hidden;">
+            <div style="padding: 18px 24px 22px 24px;">
+                <table style="width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed;">
+                    <thead>
+                        <tr>
+                            <th style="padding: 12px 10px 12px 20px; width:72px; text-align:center; font-size:18px; color:rgba(148,163,184,0.96); font-weight:600;">No.</th>
+                            <th style="padding: 12px 14px; width:156px; text-align:left; font-size:18px; color:rgba(148,163,184,0.96); font-weight:600;">代码</th>
+                            <th style="padding: 12px 14px; text-align:left; font-size:18px; color:rgba(148,163,184,0.96); font-weight:600;">基金名称</th>
+                            <th style="padding: 12px 20px 12px 14px; width:168px; text-align:right; font-size:18px; color:rgba(148,163,184,0.96); font-weight:600;">涨跌幅</th>
+                        </tr>
+                    </thead>
                     <tbody>
                         ${rowsHtml}
                     </tbody>
@@ -463,10 +484,7 @@ const FundSelector = {
             </div>
         </div>
 
-        <!-- 底部个人宣传二维码 -->
-        <div style="position:absolute; left:0; right:0; bottom:72px; display:flex; align-items:center; justify-content:center;">
-            <img data-role="poster-qr" src="${qrSrc}" style="width:220px; height:220px; object-fit:cover; border-radius: 18px;" crossorigin="anonymous" />
-        </div>
+    
     </div>
 </body>
 </html>
